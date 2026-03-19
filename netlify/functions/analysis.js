@@ -29,9 +29,11 @@ function callAnthropic(apiKey, prompt, mode) {
 
     const req = https.request(opts, (res) => {
       let data = "";
+      console.log("[analysis] Anthropic HTTP status:", res.statusCode);
       res.on("data", (c) => (data += c));
       res.on("end", () => {
         try {
+          console.log("[analysis] Anthropic raw response:", data.substring(0, 500));
           const json = JSON.parse(data);
           resolve(json.content?.[0]?.text || "Analysis unavailable.");
         } catch {
