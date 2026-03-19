@@ -64,6 +64,9 @@ exports.handler = async (event) => {
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
+  console.log("[analysis] ANTHROPIC_API_KEY present:", !!apiKey);
+  console.log("[analysis] ANTHROPIC_API_KEY length:", apiKey ? apiKey.length : 0);
+  console.log("[analysis] Available env var keys:", Object.keys(process.env).filter(k => k.includes("ANTHROPIC") || k.includes("API")).join(", ") || "none matching");
   if (!apiKey) {
     return {
       statusCode: 200,
