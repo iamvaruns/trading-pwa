@@ -1,0 +1,18 @@
+[build]
+  functions = "netlify/functions"
+  publish = "."
+
+[[redirects]]
+  from = "/api/yahoo"
+  to = "/.netlify/functions/yahoo"
+  status = 200
+
+[[redirects]]
+  from = "/api/fred"
+  to = "/.netlify/functions/fred"
+  status = 200
+
+[[redirects]]
+  from = "/api/analysis"
+  to = "/.netlify/functions/analysis"
+  status = 200

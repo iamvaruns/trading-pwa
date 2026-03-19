@@ -15,6 +15,20 @@ const url = require('url');
 const PORT = 3000;
 const DIR = __dirname;
 
+// Load .env file (no dependencies needed)
+const envPath = path.join(DIR, '.env');
+if (fs.existsSync(envPath)) {
+  fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) return;
+    const key = trimmed.slice(0, eqIdx).trim();
+    const val = trimmed.slice(eqIdx + 1).trim();
+    if (!process.env[key]) process.env[key] = val;
+  });
+}
+
 const MIME = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -104,7 +118,7 @@ const server = http.createServer(async (req, res) => {
 
   // CORS headers for all responses
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
@@ -140,7 +154,12 @@ const server = http.createServer(async (req, res) => {
   // ── API: FRED proxy ────────────────────────────────────────────────────────
   if (pathname === '/api/fred') {
     const seriesId = parsed.query.series;
-    const apiKey = parsed.query.key;
+    const apiKey = process.env.FRED_API_KEY;
+    if (!apiKey) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ observations: [] }));
+      return;
+    }
     console.log(`  📊 FRED: ${seriesId}`);
     try {
       const data = await fetchFRED(seriesId, apiKey);
@@ -150,6 +169,67 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(502, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: e.message }));
     }
+    return;
+  }
+
+  // ── API: Anthropic AI analysis proxy ───────────────────────────────────────
+  if (pathname === '/api/analysis' && req.method === 'POST') {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ text: '[ ANTHROPIC_API_KEY not set in .env — AI analysis disabled ]' }));
+      return;
+    }
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      try {
+        const { prompt } = JSON.parse(body);
+        if (!prompt) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing prompt' }));
+          return;
+        }
+        const payload = JSON.stringify({
+          model: 'claude-sonnet-4-20250514', max_tokens: 1000,
+          messages: [{ role: 'user', content: prompt }],
+        });
+        const opts = {
+          hostname: 'api.anthropic.com', path: '/v1/messages', method: 'POST',
+          headers: {
+            'Content-Type': 'application/json', 'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01', 'Content-Length': Buffer.byteLength(payload),
+          },
+          timeout: 30000,
+        };
+        console.log('  🤖 Anthropic: requesting analysis...');
+        const apiReq = https.request(opts, (apiRes) => {
+          let data = '';
+          apiRes.on('data', c => data += c);
+          apiRes.on('end', () => {
+            try {
+              const json = JSON.parse(data);
+              const text = json.content?.[0]?.text || 'Analysis unavailable.';
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ text }));
+            } catch {
+              res.writeHead(502, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Failed to parse Anthropic response' }));
+            }
+          });
+        });
+        apiReq.on('error', (e) => {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
+        });
+        apiReq.on('timeout', () => { apiReq.destroy(); });
+        apiReq.write(payload);
+        apiReq.end();
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid request body' }));
+      }
+    });
     return;
   }
 

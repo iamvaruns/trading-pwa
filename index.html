@@ -16,11 +16,11 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-    html, body { height: 100%; overflow: hidden; background: #020b14; }
+    html, body { height: 100%; overflow: hidden; background: var(--bg, #020b14); transition: background 0.3s; }
     #root { height: 100%; display: flex; flex-direction: column; }
     ::-webkit-scrollbar { width: 3px; height: 3px; }
-    ::-webkit-scrollbar-track { background: #020b14; }
-    ::-webkit-scrollbar-thumb { background: #0d2a40; border-radius: 2px; }
+    ::-webkit-scrollbar-track { background: var(--bg, #020b14); }
+    ::-webkit-scrollbar-thumb { background: var(--dimmer, #0d2a40); border-radius: 2px; }
     input, button, select { -webkit-appearance: none; outline: none; }
     @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
     @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
@@ -31,7 +31,7 @@
     .screen { display:none; flex:1; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; }
     .screen.active { display:block; }
     .fade-in { animation: fadeUp 0.4s ease forwards; }
-    .skel { background: linear-gradient(90deg, #0a1a28 25%, #0f2236 50%, #0a1a28 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 3px; }
+    .skel { background: linear-gradient(90deg, var(--skel-a, #0a1a28) 25%, var(--skel-b, #0f2236) 50%, var(--skel-a, #0a1a28) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 3px; }
   </style>
 </head>
 <body>
@@ -60,10 +60,8 @@ const DASHBOARD_SYMBOLS = ['SPY', 'QQQ', '^VIX', '^TNX', '^DXY', ...SECTORS.map(
 // DATA FETCHING
 // ════════════════════════════════════════════════════════════
 
-// Detect if running via local server or hosted
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? ''      // use local server proxy at /api/yahoo
-  : 'https://trading-proxy.netlify.app'; // future: your deployed proxy URL
+// Both local server.js and Netlify Functions serve at /api/*
+const API_BASE = '';
 
 async function fetchYahoo(symbol, range = '1y', interval = '1d') {
   const apiUrl = `${API_BASE}/api/yahoo?symbol=${encodeURIComponent(symbol)}&range=${range}&interval=${interval}`;
@@ -76,10 +74,9 @@ async function fetchYahoo(symbol, range = '1y', interval = '1d') {
   return result;
 }
 
-async function fetchFRED(seriesId, apiKey) {
-  if (!apiKey) return null;
+async function fetchFRED(seriesId) {
   try {
-    const apiUrl = `${API_BASE}/api/fred?series=${seriesId}&key=${encodeURIComponent(apiKey)}`;
+    const apiUrl = `${API_BASE}/api/fred?series=${seriesId}`;
     const res = await fetch(apiUrl, { signal: AbortSignal.timeout(8000) });
     const json = await res.json();
     return json?.observations?.filter(o => o.value !== '.').map(o => parseFloat(o.value)) || null;
@@ -233,7 +230,7 @@ function getDecision(mqs, ew) {
 // DATA ORCHESTRATOR
 // ════════════════════════════════════════════════════════════
 
-async function loadDashboardData(fredKey) {
+async function loadDashboardData() {
   const results = {};
   const fetches = [
     fetchYahoo('SPY').then(r => results.spy = processChart(r)).catch(() => {}),
@@ -245,10 +242,8 @@ async function loadDashboardData(fredKey) {
       if (!results.sectors) results.sectors = [];
       results.sectors.push({ ...processChart(r), ticker: sec.ticker, name: sec.name });
     }).catch(() => {})),
+    fetchFRED('FEDFUNDS').then(v => { if (v) results.fedFunds = v[0]; }).catch(() => {}),
   ];
-  if (fredKey) {
-    fetches.push(fetchFRED('FEDFUNDS', fredKey).then(v => { if (v) results.fedFunds = v[0]; }).catch(() => {}));
-  }
   await Promise.allSettled(fetches);
 
   // VIX slope
@@ -276,7 +271,7 @@ async function loadStockData(symbol) {
 // ════════════════════════════════════════════════════════════
 
 function Sparkline({ closes = [], width = 100, height = 36, showSMA = {} }) {
-  if (closes.length < 2) return <div style={{ width, height, background: '#0a1a28', borderRadius: 3 }} />;
+  if (closes.length < 2) return <div style={{ width, height, background: C.dimmer, borderRadius: 3 }} />;
   const clean = closes.slice(-60);
   const allVals = [...clean];
   const smaPeriods = [20, 50];
@@ -298,9 +293,9 @@ function Sparkline({ closes = [], width = 100, height = 36, showSMA = {} }) {
   const toY = v => height - ((v - min) / range) * height * 0.9 - height * 0.05;
   const path = clean.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
   const isUp = clean[clean.length - 1] >= clean[0];
-  const color = isUp ? '#00ff88' : '#ff3b5c';
+  const color = isUp ? C.yes : C.no;
 
-  const smaColors = { 20: '#ffb800', 50: '#0088ff', 100: '#ff6b00', 200: '#cc44ff' };
+  const smaColors = { 20: C.sma20, 50: C.sma50, 100: C.sma100, 200: C.sma200 };
 
   return (
     <svg width={width} height={height} style={{ display: 'block', overflow: 'visible' }}>
@@ -325,12 +320,23 @@ function Sparkline({ closes = [], width = 100, height = 36, showSMA = {} }) {
 // UI PRIMITIVES
 // ════════════════════════════════════════════════════════════
 
-const C = {
-  yes: '#00ff88', caution: '#ffb800', no: '#ff3b5c',
-  blue: '#0088cc', dim: '#2a4a6a', dimmer: '#0d2a40',
-  text: '#c8dff0', textMid: '#8ab4d4', bg: '#020b14', bgPanel: '#050e1a',
-  sma20: '#ffb800', sma50: '#0088ff', sma100: '#ff6b00', sma200: '#cc44ff',
+const THEMES = {
+  dark: {
+    yes: '#00ff88', caution: '#ffb800', no: '#ff3b5c',
+    blue: '#0088cc', dim: '#2a4a6a', dimmer: '#0d2a40',
+    text: '#c8dff0', textMid: '#8ab4d4', bg: '#020b14', bgPanel: '#050e1a',
+    sma20: '#ffb800', sma50: '#0088ff', sma100: '#ff6b00', sma200: '#cc44ff',
+    skelA: '#0a1a28', skelB: '#0f2236',
+  },
+  light: {
+    yes: '#008a4c', caution: '#b87d00', no: '#c42b45',
+    blue: '#0070b8', dim: '#7a8a99', dimmer: '#d0d8e0',
+    text: '#1a2b3c', textMid: '#4a6070', bg: '#eef1f5', bgPanel: '#ffffff',
+    sma20: '#b87d00', sma50: '#0070b8', sma100: '#d04e00', sma200: '#8829b0',
+    skelA: '#dde2e8', skelB: '#cdd4dc',
+  },
 };
+let C = THEMES.dark;
 
 function scoreColor(s) { return s >= 70 ? C.yes : s >= 50 ? C.caution : C.no; }
 
@@ -340,8 +346,8 @@ function Sk({ w = '100%', h = 14, style = {} }) {
 
 function Panel({ title, score, children, pad = '12px 14px' }) {
   return (
-    <div style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4, overflow: 'hidden' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', borderBottom: `1px solid ${C.dimmer}` }}>
+    <div style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4, overflow: 'hidden', transition: 'background 0.3s, border-color 0.3s' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', borderBottom: `1px solid ${C.dimmer}`, transition: 'border-color 0.3s' }}>
         <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, letterSpacing: '0.12em' }}>{title}</span>
         {score !== undefined && <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: scoreColor(score), fontWeight: 700 }}>{Math.round(score)}%</span>}
       </div>
@@ -565,8 +571,7 @@ function StockCard({ data, indicators, onRemove }) {
 // AI ANALYSIS
 // ════════════════════════════════════════════════════════════
 
-async function getAIAnalysis(data, scores, decision, mode, anthropicKey) {
-  if (!anthropicKey) return '[ Set your Anthropic API key in Settings to enable AI analysis ]';
+async function getAIAnalysis(data, scores, decision, mode) {
   const prompt = `You are a professional stock market analyst writing a terminal-style briefing for ${mode} traders.
 
 Market data snapshot:
@@ -582,21 +587,21 @@ Market data snapshot:
 Write exactly 3 sentences. Be specific about actual numbers and conditions. End with one concrete implication for position sizing or setup selection. No markdown, no bullets, plain prose only.`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(`${API_BASE}/api/analysis`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
     });
     const json = await res.json();
-    return json.content?.[0]?.text || 'Analysis unavailable.';
-  } catch { return 'AI analysis failed. Check API key in Settings.'; }
+    return json.text || json.error || 'Analysis unavailable.';
+  } catch { return 'AI analysis failed. Check server logs.'; }
 }
 
 // ════════════════════════════════════════════════════════════
 // DASHBOARD SCREEN
 // ════════════════════════════════════════════════════════════
 
-function DashboardScreen({ settings }) {
+function DashboardScreen({ settings, isDesktop }) {
   const [data, setData] = useState(null);
   const [scores, setScores] = useState(null);
   const [decision, setDecision] = useState(null);
@@ -614,7 +619,7 @@ function DashboardScreen({ settings }) {
     setStatus('UPDATING');
     setError(null);
     try {
-      const d = await loadDashboardData(settings.fredKey);
+      const d = await loadDashboardData();
       const sc = {
         volatility: scoreVolatility(d),
         trend: scoreTrend(d),
@@ -629,7 +634,7 @@ function DashboardScreen({ settings }) {
       setLoading(false); setStatus('LIVE'); setSecondsAgo(0);
 
       setAnalysisLoading(true);
-      const ai = await getAIAnalysis(d, sc, dec, settings.mode, settings.anthropicKey);
+      const ai = await getAIAnalysis(d, sc, dec, settings.mode);
       setAnalysis(ai); setAnalysisLoading(false);
     } catch (e) {
       setError('Failed to load market data. Check network connection.'); setStatus('ERROR'); setLoading(false);
@@ -675,14 +680,16 @@ function DashboardScreen({ settings }) {
         </div>
       )}
 
-      <div style={{ padding: '14px' }}>
+      <div style={{ padding: isDesktop ? '20px 24px' : '14px', maxWidth: isDesktop ? 1200 : undefined, margin: isDesktop ? '0 auto' : undefined }}>
         {/* HERO */}
         <div style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 6, padding: '20px 16px', marginBottom: 12, textAlign: 'center' }}>
           <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.14em', marginBottom: 14 }}>SHOULD I TRADE RIGHT NOW?</div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-            {loading ? <Sk w={180} h={48} style={{ borderRadius: 4 }} /> : <Badge decision={dec} />}
-            {loading ? <Sk w={160} h={160} style={{ borderRadius: '50%' }} /> : <Gauge score={scores?.total || 0} decision={dec} size={156} />}
-            {!loading && <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: dec === 'YES' ? C.yes : dec === 'CAUTION' ? C.caution : C.no, opacity: 0.8 }}>{subText}</div>}
+          <div style={{ display: 'flex', flexDirection: isDesktop ? 'row' : 'column', alignItems: 'center', justifyContent: 'center', gap: isDesktop ? 40 : 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+              {loading ? <Sk w={180} h={48} style={{ borderRadius: 4 }} /> : <Badge decision={dec} />}
+              {!loading && <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: dec === 'YES' ? C.yes : dec === 'CAUTION' ? C.caution : C.no, opacity: 0.8 }}>{subText}</div>}
+            </div>
+            {loading ? <Sk w={160} h={160} style={{ borderRadius: '50%' }} /> : <Gauge score={scores?.total || 0} decision={dec} size={isDesktop ? 180 : 156} />}
           </div>
         </div>
 
@@ -702,7 +709,7 @@ function DashboardScreen({ settings }) {
         )}
 
         {/* DATA PANELS GRID */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : '1fr 1fr', gap: 10, marginTop: 12 }}>
 
           {/* VOLATILITY */}
           <Panel title="VOLATILITY" score={scores?.volatility}>
@@ -760,7 +767,7 @@ function DashboardScreen({ settings }) {
         {!loading && spy?.closes?.length > 0 && (
           <div style={{ marginTop: 12 }}>
             <Panel title={`SPY PRICE CHART — ${spy.closes.length}D | MA20 MA50 MA200`}>
-              <Sparkline closes={spy.closes} width={Math.min(window.innerWidth - 62, 500)} height={80}
+              <Sparkline closes={spy.closes} width={Math.min(window.innerWidth - 62, isDesktop ? 1100 : 500)} height={isDesktop ? 120 : 80}
                 showSMA={{ 20: true, 50: true, 200: true }} />
               <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
                 {[['MA20', C.sma20, spy.sma20], ['MA50', C.sma50, spy.sma50], ['MA100', C.sma100, spy.sma100], ['MA200', C.sma200, spy.sma200]].map(([l, c, v]) => (
@@ -798,7 +805,7 @@ function DashboardScreen({ settings }) {
 
 const DEFAULT_INDICATORS = { sma20: true, sma50: true, sma100: false, sma200: true, volume: true };
 
-function ScreenerScreen() {
+function ScreenerScreen({ isDesktop }) {
   const [stocks, setStocks] = useState(() => {
     try { return JSON.parse(localStorage.getItem('screener_stocks') || JSON.stringify(DEFAULT_SCREENER)); } catch { return DEFAULT_SCREENER; }
   });
@@ -860,6 +867,7 @@ function ScreenerScreen() {
     <div style={{ padding: '0 0 80px' }}>
       {/* Header */}
       <div style={{ background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}`, padding: '10px 14px' }}>
+        <div style={{ maxWidth: isDesktop ? 1200 : undefined, margin: isDesktop ? '0 auto' : undefined }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <input
             value={input}
@@ -886,14 +894,16 @@ function ScreenerScreen() {
             }}>{indicators[key] ? '●' : '○'} {label}</button>
           ))}
         </div>
+        </div>
       </div>
 
-      <div style={{ padding: '12px 14px' }}>
+      <div style={{ padding: isDesktop ? '16px 24px' : '12px 14px', maxWidth: isDesktop ? 1200 : undefined, margin: isDesktop ? '0 auto' : undefined }}>
         {stocks.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: C.dim, fontFamily: 'Share Tech Mono', fontSize: 12 }}>
             No stocks in screener. Add a ticker above.
           </div>
         )}
+        <div style={isDesktop ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } : {}}>
         {stocks.map(sym => {
           const d = data[sym];
           if (loadingMap[sym] || !d) return (
@@ -921,6 +931,7 @@ function ScreenerScreen() {
           );
           return <StockCard key={sym} data={d} indicators={indicators} onRemove={() => removeStock(sym)} />;
         })}
+        </div>
       </div>
     </div>
   );
@@ -930,7 +941,7 @@ function ScreenerScreen() {
 // SETTINGS SCREEN
 // ════════════════════════════════════════════════════════════
 
-function SettingsScreen({ settings, onSave }) {
+function SettingsScreen({ settings, onSave, themeName, onThemeChange, layout, onLayoutChange }) {
   const [form, setForm] = useState(settings);
   const [saved, setSaved] = useState(false);
 
@@ -956,11 +967,42 @@ function SettingsScreen({ settings, onSave }) {
     <div style={{ padding: '16px 14px 80px' }}>
       <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, letterSpacing: '0.12em', marginBottom: 20, paddingBottom: 10, borderBottom: `1px solid ${C.dimmer}` }}>CONFIGURATION</div>
 
+      <Panel title="DISPLAY" pad="14px">
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, display: 'block', marginBottom: 8, letterSpacing: '0.1em' }}>THEME</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {['dark', 'light'].map(t => (
+              <button key={t} onClick={() => onThemeChange(t)} style={{
+                flex: 1, padding: '10px', background: themeName === t ? C.dimmer : 'transparent',
+                border: `1px solid ${themeName === t ? C.blue : C.dimmer}`,
+                color: themeName === t ? C.blue : C.dim, cursor: 'pointer',
+                fontFamily: 'Share Tech Mono', fontSize: 11, borderRadius: 4,
+              }}>{t === 'dark' ? '☽ DARK' : '☀ LIGHT'}</button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, display: 'block', marginBottom: 8, letterSpacing: '0.1em' }}>LAYOUT</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {['mobile', 'desktop'].map(l => (
+              <button key={l} onClick={() => onLayoutChange(l)} style={{
+                flex: 1, padding: '10px', background: layout === l ? C.dimmer : 'transparent',
+                border: `1px solid ${layout === l ? C.blue : C.dimmer}`,
+                color: layout === l ? C.blue : C.dim, cursor: 'pointer',
+                fontFamily: 'Share Tech Mono', fontSize: 11, borderRadius: 4,
+              }}>{l === 'mobile' ? '◧ MOBILE' : '⊞ DESKTOP'}</button>
+            ))}
+          </div>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginTop: 8 }}>Desktop uses wider layout with 4-column grid and side-by-side panels</div>
+        </div>
+      </Panel>
+
+      <div style={{ marginTop: 16 }}>
       <Panel title="TRADING MODE" pad="14px">
         <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
           {['SWING', 'DAY'].map(m => (
             <button key={m} onClick={() => setForm(p => ({ ...p, mode: m }))} style={{
-              flex: 1, padding: '10px', background: form.mode === m ? '#0d2a40' : 'transparent',
+              flex: 1, padding: '10px', background: form.mode === m ? C.dimmer : 'transparent',
               border: `1px solid ${form.mode === m ? C.blue : C.dimmer}`,
               color: form.mode === m ? C.blue : C.dim, cursor: 'pointer',
               fontFamily: 'Share Tech Mono', fontSize: 11, borderRadius: 4,
@@ -969,13 +1011,20 @@ function SettingsScreen({ settings, onSave }) {
         </div>
         <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginTop: 8 }}>Affects scoring thresholds and AI analysis tone</div>
       </Panel>
+      </div>
 
       <div style={{ marginTop: 16 }}>
         <Panel title="API KEYS" pad="14px">
-          <Field k="anthropicKey" label="ANTHROPIC API KEY" placeholder="sk-ant-..." type="password"
-            note="Powers the AI terminal analysis. Get free key at console.anthropic.com" />
-          <Field k="fredKey" label="FRED API KEY (OPTIONAL)" placeholder="Your FRED API key"
-            note="Enhances macro data (Fed Funds rate). Free at fred.stlouisfed.org" />
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.textMid, lineHeight: 1.8 }}>
+            <div style={{ color: C.yes, marginBottom: 6 }}>Keys are set server-side (secure)</div>
+            <div>● <span style={{ color: C.dim }}>ANTHROPIC_API_KEY</span> — AI terminal analysis</div>
+            <div>● <span style={{ color: C.dim }}>FRED_API_KEY</span> — Fed Funds macro data</div>
+          </div>
+          <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(0,136,204,0.06)', border: `1px solid ${C.blue}30`, borderRadius: 4 }}>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, lineHeight: 1.7 }}>
+              Local: set in .env file · Netlify: set in Site settings → Environment variables
+            </div>
+          </div>
         </Panel>
       </div>
 
@@ -986,7 +1035,7 @@ function SettingsScreen({ settings, onSave }) {
             <div style={{ display: 'flex', gap: 8 }}>
               {[30, 45, 60, 120].map(s => (
                 <button key={s} onClick={() => setForm(p => ({ ...p, refreshInterval: s * 1000 }))} style={{
-                  flex: 1, padding: '8px 4px', background: form.refreshInterval === s * 1000 ? '#0d2a40' : 'transparent',
+                  flex: 1, padding: '8px 4px', background: form.refreshInterval === s * 1000 ? C.dimmer : 'transparent',
                   border: `1px solid ${form.refreshInterval === s * 1000 ? C.blue : C.dimmer}`,
                   color: form.refreshInterval === s * 1000 ? C.blue : C.dim, cursor: 'pointer',
                   fontFamily: 'Share Tech Mono', fontSize: 10, borderRadius: 4,
@@ -1041,16 +1090,41 @@ function SettingsScreen({ settings, onSave }) {
 // APP SHELL
 // ════════════════════════════════════════════════════════════
 
-const DEFAULT_SETTINGS = { mode: 'SWING', anthropicKey: '', fredKey: '', refreshInterval: 45000 };
+const DEFAULT_SETTINGS = { mode: 'SWING', refreshInterval: 45000 };
 
 function App() {
   const [tab, setTab] = useState('dashboard');
   const [settings, setSettings] = useState(() => {
     try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('app_settings') || '{}') }; } catch { return DEFAULT_SETTINGS; }
   });
+  const [themeName, setThemeName] = useState(() => {
+    try { return localStorage.getItem('app_theme') || 'dark'; } catch { return 'dark'; }
+  });
+  const [layout, setLayout] = useState(() => {
+    try { return localStorage.getItem('app_layout') || 'mobile'; } catch { return 'mobile'; }
+  });
 
-  // Safe area for notch/gesture bar on modern phones
+  C = THEMES[themeName];
+  const isDesktop = layout === 'desktop';
+
+  useEffect(() => {
+    localStorage.setItem('app_theme', themeName);
+    const r = document.documentElement.style;
+    r.setProperty('--bg', C.bg);
+    r.setProperty('--dimmer', C.dimmer);
+    r.setProperty('--skel-a', C.skelA);
+    r.setProperty('--skel-b', C.skelB);
+    document.body.style.background = C.bg;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', C.bg);
+  }, [themeName]);
+
+  useEffect(() => { localStorage.setItem('app_layout', layout); }, [layout]);
+
   const safeBottom = 'env(safe-area-inset-bottom, 0px)';
+
+  const toggleTheme = () => setThemeName(t => t === 'dark' ? 'light' : 'dark');
+  const toggleLayout = () => setLayout(l => l === 'mobile' ? 'desktop' : 'mobile');
 
   const tabs = [
     { id: 'dashboard', label: 'DASHBOARD', icon: '◉' },
@@ -1058,30 +1132,42 @@ function App() {
     { id: 'settings', label: 'SETTINGS', icon: '⚙' },
   ];
 
+  const hdrBtn = { background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '3px 8px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: 10, borderRadius: 3, transition: 'all 0.2s' };
+
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, fontFamily: 'Share Tech Mono' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, fontFamily: 'Share Tech Mono', transition: 'background 0.3s' }}>
       {/* Header */}
-      <div style={{ background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}`, padding: '10px 16px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}`, padding: '10px 16px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.3s, border-color 0.3s' }}>
         <div>
           <div style={{ fontSize: 13, color: C.text, fontWeight: 700, letterSpacing: '0.1em' }}>◈ SHOULD I BE TRADING?</div>
           <div style={{ fontSize: 9, color: C.dim, marginTop: 1 }}>{settings.mode} MODE · BLOOMBERG TERMINAL</div>
         </div>
-        <div style={{ fontSize: 9, color: C.dim, textAlign: 'right' }}>
-          <div style={{ color: C.yes }}>● LIVE</div>
-          <div style={{ marginTop: 1 }}>YAHOO · FRED</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={toggleTheme} style={hdrBtn} title={themeName === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            {themeName === 'dark' ? '☀' : '☽'}
+          </button>
+          <button onClick={toggleLayout} style={hdrBtn} title={isDesktop ? 'Switch to mobile layout' : 'Switch to desktop layout'}>
+            {isDesktop ? '◧' : '⊞'}
+          </button>
+          <div style={{ fontSize: 9, color: C.dim, textAlign: 'right', marginLeft: 4 }}>
+            <div style={{ color: C.yes }}>● LIVE</div>
+            <div style={{ marginTop: 1 }}>YAHOO · FRED</div>
+          </div>
         </div>
       </div>
 
       {/* Screens */}
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
         <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', display: tab === 'dashboard' ? 'block' : 'none' }}>
-          <DashboardScreen settings={settings} />
+          <DashboardScreen settings={settings} isDesktop={isDesktop} />
         </div>
         <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', display: tab === 'screener' ? 'block' : 'none' }}>
-          <ScreenerScreen />
+          <ScreenerScreen isDesktop={isDesktop} />
         </div>
         <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', display: tab === 'settings' ? 'block' : 'none' }}>
-          <SettingsScreen settings={settings} onSave={setSettings} />
+          <SettingsScreen settings={settings} onSave={setSettings}
+            themeName={themeName} onThemeChange={setThemeName}
+            layout={layout} onLayoutChange={setLayout} />
         </div>
       </div>
 
@@ -1090,6 +1176,7 @@ function App() {
         background: C.bgPanel, borderTop: `1px solid ${C.dimmer}`,
         display: 'flex', flexShrink: 0,
         paddingBottom: safeBottom,
+        transition: 'background 0.3s, border-color 0.3s',
       }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
