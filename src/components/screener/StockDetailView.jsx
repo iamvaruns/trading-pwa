@@ -109,7 +109,7 @@ function ScorePanel({ score, horizon, C, D }) {
 
 function RiskCalculator({ data, C, D, isDesktop, candleSeriesRef }) {
   const [accountSize, setAccountSize] = useState(() => {
-    try { return Number(localStorage.getItem('risk_account_size')) || 10000; } catch { return 10000; }
+    try { return Number(localStorage.getItem('risk_account_size')) || 0; } catch { return 0; }
   });
   const [riskPct, setRiskPct] = useState(() => {
     try { return Number(localStorage.getItem('risk_pct')) || 1; } catch { return 1; }
@@ -121,8 +121,9 @@ function RiskCalculator({ data, C, D, isDesktop, candleSeriesRef }) {
   const entry = data.price;
   const stopLoss = entry - 2 * data.atr14;
   const riskPerShare = entry - stopLoss;
-  const riskAmount = accountSize * (riskPct / 100);
-  const shares = riskPerShare > 0 ? Math.floor(riskAmount / riskPerShare) : 0;
+  const hasAccount = accountSize > 0;
+  const riskAmount = hasAccount ? accountSize * (riskPct / 100) : 0;
+  const shares = hasAccount && riskPerShare > 0 ? Math.floor(riskAmount / riskPerShare) : 0;
   const positionValue = shares * entry;
 
   const nearestResistance = data.srLevels?.find(l => l.type === 'resistance' && l.price > entry);
@@ -167,19 +168,27 @@ function RiskCalculator({ data, C, D, isDesktop, candleSeriesRef }) {
 
   return (
     <div style={{ marginTop: 12, padding: '10px 14px', background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4 }}>
-      <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 10 }}>RISK CALCULATOR</div>
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 10 }}>
+      <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 4 }}>RISK CALCULATOR</div>
+      <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, marginBottom: 10, opacity: 0.7 }}>
+        Enter your account size and risk tolerance to calculate position sizing.
+      </div>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <label style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>ACCOUNT SIZE ($)</label>
-          <input type="number" value={accountSize} onChange={e => saveAccount(e.target.value)}
+          <label style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.text }}>YOUR ACCOUNT SIZE ($)</label>
+          <input
+            type="number"
+            value={accountSize || ''}
+            placeholder="e.g. 25000"
+            onChange={e => saveAccount(e.target.value)}
             style={{
-              background: C.bg, border: `1px solid ${C.dimmer}`, color: C.text,
-              padding: '6px 10px', fontFamily: 'Share Tech Mono', fontSize: 12,
-              borderRadius: 3, width: 120,
-            }} />
+              background: C.bg, border: `1px solid ${hasAccount ? C.blue : C.dimmer}`, color: C.text,
+              padding: '8px 12px', fontFamily: 'Share Tech Mono', fontSize: 13,
+              borderRadius: 3, width: 160,
+            }}
+          />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <label style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>RISK PER TRADE</label>
+          <label style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.text }}>RISK PER TRADE</label>
           <div style={{ display: 'flex', gap: 4 }}>
             {[0.5, 1, 2].map(pct => (
               <button key={pct} onClick={() => saveRisk(pct)} style={{
@@ -199,10 +208,6 @@ function RiskCalculator({ data, C, D, isDesktop, candleSeriesRef }) {
           { label: 'STOP LOSS', value: `$${stopLoss.toFixed(2)}`, color: C.no },
           { label: 'TARGET', value: `$${target.toFixed(2)}`, color: C.yes },
           { label: 'R:R RATIO', value: `${rrRatio.toFixed(1)}:1`, color: rrColor },
-          { label: 'SHARES', value: shares.toLocaleString(), color: C.text },
-          { label: 'POSITION $', value: `$${positionValue.toLocaleString()}`, color: C.text },
-          { label: 'RISK $', value: `$${riskAmount.toFixed(0)}`, color: C.caution },
-          { label: 'RISK/SHARE', value: `$${riskPerShare.toFixed(2)}`, color: C.dim },
         ].map(item => (
           <div key={item.label}>
             <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginBottom: 2 }}>{item.label}</div>
@@ -210,6 +215,35 @@ function RiskCalculator({ data, C, D, isDesktop, candleSeriesRef }) {
           </div>
         ))}
       </div>
+      {hasAccount ? (
+        <>
+          <div style={{ borderTop: `1px solid ${C.dimmer}`, marginTop: 10, paddingTop: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: 10 }}>
+              {[
+                { label: 'POSITION SIZE', value: `${shares.toLocaleString()} shares`, color: C.text },
+                { label: 'POSITION VALUE', value: `$${positionValue.toLocaleString()}`, color: C.text },
+                { label: 'MAX LOSS', value: `$${riskAmount.toFixed(0)}`, color: C.caution },
+                { label: 'STOP DISTANCE', value: `$${riskPerShare.toFixed(2)}`, color: C.dim },
+              ].map(item => (
+                <div key={item.label}>
+                  <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginBottom: 2 }}>{item.label}</div>
+                  <div style={{ fontFamily: 'Share Tech Mono', fontSize: 13, color: item.color, fontWeight: 700 }}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginTop: 8, fontStyle: 'italic', opacity: 0.7 }}>
+            Position sized so that hitting the stop loss costs at most {riskPct}% of your account (${riskAmount.toFixed(0)}).
+          </div>
+        </>
+      ) : (
+        <div style={{
+          fontFamily: 'Share Tech Mono', fontSize: 11, color: C.dim, textAlign: 'center',
+          padding: '14px 0', marginTop: 10, borderTop: `1px solid ${C.dimmer}`,
+        }}>
+          Set your account size above to see position sizing.
+        </div>
+      )}
     </div>
   );
 }
