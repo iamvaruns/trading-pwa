@@ -29,12 +29,15 @@ function callAnthropic(apiKey, prompt, mode) {
 
     const req = https.request(opts, (res) => {
       let data = "";
-      console.log("[analysis] Anthropic HTTP status:", res.statusCode);
       res.on("data", (c) => (data += c));
       res.on("end", () => {
         try {
-          console.log("[analysis] Anthropic raw response:", data.substring(0, 500));
           const json = JSON.parse(data);
+          if (json.type === "error") {
+            const msg = json.error?.message || "Unknown API error";
+            reject(new Error(msg));
+            return;
+          }
           resolve(json.content?.[0]?.text || "Analysis unavailable.");
         } catch {
           reject(new Error("Failed to parse Anthropic response"));
@@ -66,9 +69,6 @@ exports.handler = async (event) => {
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  console.log("[analysis] ANTHROPIC_API_KEY present:", !!apiKey);
-  console.log("[analysis] ANTHROPIC_API_KEY length:", apiKey ? apiKey.length : 0);
-  console.log("[analysis] Available env var keys:", Object.keys(process.env).filter(k => k.includes("ANTHROPIC") || k.includes("API")).join(", ") || "none matching");
   if (!apiKey) {
     return {
       statusCode: 200,
@@ -96,10 +96,14 @@ exports.handler = async (event) => {
       body: JSON.stringify({ text }),
     };
   } catch (e) {
+    const isBilling = e.message.includes("credit balance") || e.message.includes("billing");
+    const userMessage = isBilling
+      ? "[ Anthropic API credit balance too low — add credits at console.anthropic.com ]"
+      : e.message;
     return {
-      statusCode: 502,
+      statusCode: isBilling ? 200 : 502,
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: e.message }),
+      body: JSON.stringify(isBilling ? { text: userMessage } : { error: userMessage }),
     };
   }
 };
