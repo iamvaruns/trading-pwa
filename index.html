@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#020b14">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ShouldITrade">
+  <title>Should I Be Trading?</title>
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; overflow: hidden; background: #020b14; }
+    #root { height: 100%; display: flex; flex-direction: column; }
+    ::-webkit-scrollbar { width: 3px; height: 3px; }
+    ::-webkit-scrollbar-track { background: #020b14; }
+    ::-webkit-scrollbar-thumb { background: #0d2a40; border-radius: 2px; }
+    input, button, select { -webkit-appearance: none; outline: none; }
+    @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes glow { 0%,100% { filter: drop-shadow(0 0 4px currentColor); } 50% { filter: drop-shadow(0 0 12px currentColor); } }
+    .screen { display:none; flex:1; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; }
+    .screen.active { display:block; }
+    .fade-in { animation: fadeUp 0.4s ease forwards; }
+    .skel { background: linear-gradient(90deg, #0a1a28 25%, #0f2236 50%, #0a1a28 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// ════════════════════════════════════════════════════════════
+// CONSTANTS
+// ════════════════════════════════════════════════════════════
+
+const SECTORS = [
+  { ticker: 'XLK', name: 'Technology' }, { ticker: 'XLF', name: 'Financials' },
+  { ticker: 'XLE', name: 'Energy' }, { ticker: 'XLV', name: 'Health Care' },
+  { ticker: 'XLI', name: 'Industrials' }, { ticker: 'XLY', name: 'Cons. Disc.' },
+  { ticker: 'XLP', name: 'Staples' }, { ticker: 'XLU', name: 'Utilities' },
+  { ticker: 'XLB', name: 'Materials' }, { ticker: 'XLRE', name: 'Real Estate' },
+  { ticker: 'XLC', name: 'Comm. Svcs' },
+];
+
+const DEFAULT_SCREENER = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'META', 'GOOGL', 'TSLA', 'SPY', 'QQQ'];
+const DASHBOARD_SYMBOLS = ['SPY', 'QQQ', '^VIX', '^TNX', '^DXY', ...SECTORS.map(s => s.ticker)];
+
+// ════════════════════════════════════════════════════════════
+// DATA FETCHING
+// ════════════════════════════════════════════════════════════
+
+// Detect if running via local server or hosted
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? ''      // use local server proxy at /api/yahoo
+  : 'https://trading-proxy.netlify.app'; // future: your deployed proxy URL
+
+async function fetchYahoo(symbol, range = '1y', interval = '1d') {
+  const apiUrl = `${API_BASE}/api/yahoo?symbol=${encodeURIComponent(symbol)}&range=${range}&interval=${interval}`;
+  const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${symbol}`);
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  const result = json?.chart?.result?.[0];
+  if (!result) throw new Error(`No chart data for ${symbol}`);
+  return result;
+}
+
+async function fetchFRED(seriesId, apiKey) {
+  if (!apiKey) return null;
+  try {
+    const apiUrl = `${API_BASE}/api/fred?series=${seriesId}&key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(8000) });
+    const json = await res.json();
+    return json?.observations?.filter(o => o.value !== '.').map(o => parseFloat(o.value)) || null;
+  } catch { return null; }
+}
+
+// ════════════════════════════════════════════════════════════
+// CALCULATIONS
+// ════════════════════════════════════════════════════════════
+
+function validClose(arr) { return (arr || []).filter(v => v != null && !isNaN(v)); }
+
+function calcSMA(closes, period) {
+  const clean = validClose(closes);
+  if (clean.length < period) return null;
+  const slice = clean.slice(-period);
+  return slice.reduce((a, b) => a + b, 0) / period;
+}
+
+function calcRSI(closes, period = 14) {
+  const clean = validClose(closes);
+  if (clean.length < period + 1) return 50;
+  let gains = 0, losses = 0;
+  for (let i = clean.length - period; i < clean.length; i++) {
+    const diff = clean[i] - clean[i - 1];
+    if (diff > 0) gains += diff; else losses += Math.abs(diff);
+  }
+  const rs = (gains / period) / (losses / period || 0.001);
+  return 100 - (100 / (1 + rs));
+}
+
+function calcSlope5d(closes) {
+  const clean = validClose(closes).slice(-6);
+  if (clean.length < 2) return 0;
+  return clean[clean.length - 1] - clean[0];
+}
+
+function calcPercentile(values, current) {
+  const clean = validClose(values);
+  if (!clean.length) return 50;
+  return Math.round((clean.filter(v => v <= current).length / clean.length) * 100);
+}
+
+function calcAvgVolume(volumes, period = 20) {
+  const clean = (volumes || []).filter(v => v != null && v > 0).slice(-period);
+  if (!clean.length) return 0;
+  return clean.reduce((a, b) => a + b, 0) / clean.length;
+}
+
+function processChart(result) {
+  const meta = result.meta || {};
+  const timestamps = result.timestamp || [];
+  const q = result.indicators?.quote?.[0] || {};
+  const closes = q.close || [];
+  const volumes = q.volume || [];
+  const clean = validClose(closes);
+  const lastClose = clean[clean.length - 1];
+  const prevClose = clean[clean.length - 2];
+  const lastVol = (volumes || []).filter(v => v != null).slice(-1)[0] || 0;
+
+  return {
+    symbol: meta.symbol,
+    price: lastClose || meta.regularMarketPrice,
+    prevClose,
+    change1d: prevClose ? ((lastClose - prevClose) / prevClose) * 100 : 0,
+    volume: lastVol,
+    avgVol20: calcAvgVolume(volumes, 20),
+    sma20: calcSMA(closes, 20),
+    sma50: calcSMA(closes, 50),
+    sma100: calcSMA(closes, 100),
+    sma200: calcSMA(closes, 200),
+    rsi14: calcRSI(closes),
+    slope5d: calcSlope5d(closes),
+    percentile1y: calcPercentile(closes, lastClose),
+    closes: clean.slice(-60),
+    timestamps: timestamps.slice(-60),
+    currency: meta.currency,
+  };
+}
+
+// ════════════════════════════════════════════════════════════
+// SCORING ENGINE
+// ════════════════════════════════════════════════════════════
+
+function scoreVolatility(d) {
+  let s = 100;
+  const vix = d.vix?.price || 20;
+  if (vix > 35) s -= 60; else if (vix > 25) s -= 40; else if (vix > 20) s -= 20; else if (vix <= 13) s += 5;
+  const slope = d.vix?.slope5d || 0;
+  if (slope > 2) s -= 20; else if (slope > 0.5) s -= 10; else if (slope < -1) s += 8;
+  return clamp(s);
+}
+
+function scoreTrend(d) {
+  let s = 50;
+  const spy = d.spy || {};
+  if (spy.price > spy.sma200) s += 15; else s -= 15;
+  if (spy.price > spy.sma50) s += 12; else s -= 12;
+  if (spy.price > spy.sma20) s += 8; else s -= 8;
+  const rsi = spy.rsi14 || 50;
+  if (rsi > 60 && rsi < 75) s += 10; else if (rsi > 50) s += 5; else if (rsi < 40) s -= 10; else if (rsi < 30) s -= 15;
+  const qqq = d.qqq || {};
+  if (qqq.price > qqq.sma50) s += 5; else s -= 5;
+  return clamp(s);
+}
+
+function scoreBreadth(d) {
+  const sectorAbove50 = (d.sectors || []).filter(s => s.price > s.sma50).length;
+  const sectorAbove200 = (d.sectors || []).filter(s => s.price > s.sma200).length;
+  const total = (d.sectors || []).length || 1;
+  const pct50 = (sectorAbove50 / total) * 100;
+  const pct200 = (sectorAbove200 / total) * 100;
+  return clamp(pct50 * 0.5 + pct200 * 0.5);
+}
+
+function scoreMomentum(d) {
+  const sects = d.sectors || [];
+  if (!sects.length) return 50;
+  const changes = sects.map(s => s.change1d || 0).sort((a, b) => b - a);
+  const posCount = changes.filter(c => c > 0).length;
+  const top3avg = changes.slice(0, 3).reduce((a, b) => a + b, 0) / 3;
+  const bot3avg = changes.slice(-3).reduce((a, b) => a + b, 0) / 3;
+  const spread = top3avg - bot3avg;
+  let s = (posCount / changes.length) * 70;
+  if (spread > 2) s += 20; else if (spread > 1) s += 10; else if (spread < 0) s -= 10;
+  return clamp(s);
+}
+
+function scoreMacro(d) {
+  let s = 60;
+  const tnx = d.tnx?.price || 4.3;
+  if (tnx > 5.0) s -= 25; else if (tnx > 4.5) s -= 12; else if (tnx < 3.5) s += 10;
+  const dxy = d.dxy?.price || 103;
+  if (dxy > 107) s -= 10; else if (dxy < 99) s += 8;
+  if (d.fomcSoon) s -= 10;
+  return clamp(s);
+}
+
+function clamp(v) { return Math.max(0, Math.min(100, v)); }
+
+function computeMQS(scores) {
+  return Math.round(scores.volatility * 0.25 + scores.momentum * 0.25 + scores.trend * 0.20 + scores.breadth * 0.20 + scores.macro * 0.10);
+}
+
+function getDecision(mqs, ew) {
+  const combined = mqs * 0.75 + ew * 0.25;
+  if (combined >= 75) return 'YES'; if (combined >= 55) return 'CAUTION'; return 'NO';
+}
+
+// ════════════════════════════════════════════════════════════
+// DATA ORCHESTRATOR
+// ════════════════════════════════════════════════════════════
+
+async function loadDashboardData(fredKey) {
+  const results = {};
+  const fetches = [
+    fetchYahoo('SPY').then(r => results.spy = processChart(r)).catch(() => {}),
+    fetchYahoo('QQQ').then(r => results.qqq = processChart(r)).catch(() => {}),
+    fetchYahoo('^VIX').then(r => results.vix = processChart(r)).catch(() => {}),
+    fetchYahoo('^TNX').then(r => results.tnx = processChart(r)).catch(() => {}),
+    fetchYahoo('^DXY').then(r => results.dxy = processChart(r)).catch(() => {}),
+    ...SECTORS.map(sec => fetchYahoo(sec.ticker).then(r => {
+      if (!results.sectors) results.sectors = [];
+      results.sectors.push({ ...processChart(r), ticker: sec.ticker, name: sec.name });
+    }).catch(() => {})),
+  ];
+  if (fredKey) {
+    fetches.push(fetchFRED('FEDFUNDS', fredKey).then(v => { if (v) results.fedFunds = v[0]; }).catch(() => {}));
+  }
+  await Promise.allSettled(fetches);
+
+  // VIX slope
+  if (results.vix) results.vix.slope5d = calcSlope5d(results.vix.closes);
+
+  // FOMC flag (hardcoded known dates — update periodically)
+  const fomcDates = ['2025-03-19','2025-05-07','2025-06-18','2025-07-30','2025-09-17','2025-10-29','2025-12-10',
+    '2026-01-28','2026-03-18','2026-04-29','2026-06-17','2026-07-29','2026-09-16','2026-11-04','2026-12-16'];
+  const now = new Date();
+  results.fomcSoon = fomcDates.some(d => {
+    const diff = (new Date(d) - now) / (1000 * 60 * 60);
+    return diff >= -24 && diff <= 72;
+  });
+
+  return results;
+}
+
+async function loadStockData(symbol) {
+  const result = await fetchYahoo(symbol, '1y');
+  return processChart(result);
+}
+
+// ════════════════════════════════════════════════════════════
+// SPARKLINE COMPONENT
+// ════════════════════════════════════════════════════════════
+
+function Sparkline({ closes = [], width = 100, height = 36, showSMA = {} }) {
+  if (closes.length < 2) return <div style={{ width, height, background: '#0a1a28', borderRadius: 3 }} />;
+  const clean = closes.slice(-60);
+  const allVals = [...clean];
+  const smaPeriods = [20, 50];
+  const smaLines = {};
+  smaPeriods.forEach(p => {
+    if (showSMA?.[p] && clean.length >= p) {
+      const line = clean.map((_, i, arr) => {
+        if (i < p - 1) return null;
+        const sl = arr.slice(i - p + 1, i + 1);
+        return sl.reduce((a, b) => a + b, 0) / p;
+      }).filter(v => v != null);
+      smaLines[p] = line;
+      allVals.push(...line);
+    }
+  });
+  const min = Math.min(...allVals), max = Math.max(...allVals);
+  const range = max - min || 1;
+  const toX = i => (i / (clean.length - 1)) * width;
+  const toY = v => height - ((v - min) / range) * height * 0.9 - height * 0.05;
+  const path = clean.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+  const isUp = clean[clean.length - 1] >= clean[0];
+  const color = isUp ? '#00ff88' : '#ff3b5c';
+
+  const smaColors = { 20: '#ffb800', 50: '#0088ff', 100: '#ff6b00', 200: '#cc44ff' };
+
+  return (
+    <svg width={width} height={height} style={{ display: 'block', overflow: 'visible' }}>
+      <defs>
+        <linearGradient id={`sg${width}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.15" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={path + ` L${toX(clean.length-1)},${height} L0,${height} Z`} fill={`url(#sg${width})`} />
+      <path d={path} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+      {Object.entries(smaLines).map(([p, vals]) => {
+        const offset = clean.length - vals.length;
+        const sp = vals.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i + offset).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+        return <path key={p} d={sp} fill="none" stroke={smaColors[p]} strokeWidth="1" strokeOpacity="0.8" />;
+      })}
+    </svg>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// UI PRIMITIVES
+// ════════════════════════════════════════════════════════════
+
+const C = {
+  yes: '#00ff88', caution: '#ffb800', no: '#ff3b5c',
+  blue: '#0088cc', dim: '#2a4a6a', dimmer: '#0d2a40',
+  text: '#c8dff0', textMid: '#8ab4d4', bg: '#020b14', bgPanel: '#050e1a',
+  sma20: '#ffb800', sma50: '#0088ff', sma100: '#ff6b00', sma200: '#cc44ff',
+};
+
+function scoreColor(s) { return s >= 70 ? C.yes : s >= 50 ? C.caution : C.no; }
+
+function Sk({ w = '100%', h = 14, style = {} }) {
+  return <div className="skel" style={{ width: w, height: h, ...style }} />;
+}
+
+function Panel({ title, score, children, pad = '12px 14px' }) {
+  return (
+    <div style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', borderBottom: `1px solid ${C.dimmer}` }}>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, letterSpacing: '0.12em' }}>{title}</span>
+        {score !== undefined && <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: scoreColor(score), fontWeight: 700 }}>{Math.round(score)}%</span>}
+      </div>
+      <div style={{ padding: pad }}>{children}</div>
+    </div>
+  );
+}
+
+function Row({ label, value, sub, up, status }) {
+  const dirColor = up === true ? C.yes : up === false ? C.no : C.dim;
+  const arrow = up === true ? '↑' : up === false ? '↓' : '→';
+  const statusMap = {
+    healthy: C.yes, bullish: C.yes, low: C.yes,
+    weakening: C.caution, elevated: C.caution, neutral: C.caution,
+    'risk-off': C.no, bearish: C.no, high: C.no,
+  };
+  const sColor = statusMap[status] || C.dim;
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: `1px solid ${C.dimmer}` }}>
+      <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {status && <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: sColor, textTransform: 'uppercase' }}>{status}</span>}
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 12, color: C.text, fontWeight: 700 }}>{value}</span>
+        {up !== undefined && <span style={{ color: dirColor, fontSize: 11, fontWeight: 700 }}>{arrow}</span>}
+        {sub && <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>{sub}</span>}
+      </div>
+    </div>
+  );
+}
+
+function Gauge({ score, decision, size = 160 }) {
+  const r = size * 0.4;
+  const circ = 2 * Math.PI * r;
+  const fill = (score / 100) * circ;
+  const col = decision === 'YES' ? C.yes : decision === 'CAUTION' ? C.caution : C.no;
+  return (
+    <div style={{ position: 'relative', width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={C.dimmer} strokeWidth={size * 0.065} />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth={size * 0.065}
+          strokeDasharray={`${fill} ${circ}`} strokeLinecap="round"
+          style={{ transition: 'stroke-dasharray 1.4s cubic-bezier(0.4,0,0.2,1)', filter: `drop-shadow(0 0 6px ${col})` }} />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: size * 0.22, color: col, lineHeight: 1 }}>{score}</span>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: size * 0.07, color: C.dim, marginTop: 2 }}>MQ SCORE</span>
+      </div>
+    </div>
+  );
+}
+
+function Badge({ decision }) {
+  const cfg = {
+    YES:     { col: C.yes,     label: '● TRADE', bg: 'rgba(0,255,136,0.07)' },
+    CAUTION: { col: C.caution, label: '◐ CAUTION', bg: 'rgba(255,184,0,0.07)' },
+    NO:      { col: C.no,      label: '○ STAND DOWN', bg: 'rgba(255,59,92,0.07)' },
+  }[decision] || { col: C.dim, label: '— LOADING', bg: 'transparent' };
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', padding: '10px 22px',
+      border: `2px solid ${cfg.col}`, background: cfg.bg,
+      boxShadow: `0 0 24px ${cfg.col}40`,
+      fontFamily: 'Share Tech Mono', fontSize: 22, color: cfg.col,
+      letterSpacing: '0.12em', borderRadius: 3,
+      animation: 'glow 3s ease-in-out infinite',
+    }}>{cfg.label}</div>
+  );
+}
+
+function ScoreBar({ label, score, weight, color }) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim }}>{label} <span style={{ color: C.dimmer }}>×{weight}</span></span>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.textMid }}>{Math.round(score)}%</span>
+      </div>
+      <div style={{ height: 3, background: C.dimmer, borderRadius: 2 }}>
+        <div style={{ height: '100%', width: `${score}%`, background: color, borderRadius: 2, transition: 'width 1.2s ease', boxShadow: `0 0 4px ${color}80` }} />
+      </div>
+    </div>
+  );
+}
+
+function SectorBar({ sectors }) {
+  if (!sectors?.length) return <Sk h={200} />;
+  const sorted = [...sectors].sort((a, b) => b.change1d - a.change1d);
+  const max = Math.max(...sorted.map(s => Math.abs(s.change1d || 0)), 0.01);
+  return (
+    <div>
+      {sorted.map((s, i) => {
+        const pct = Math.abs(s.change1d || 0) / max;
+        const pos = s.change1d >= 0;
+        const col = pos ? C.yes : C.no;
+        const isTop = i < 3, isBot = i >= sorted.length - 3;
+        return (
+          <div key={s.ticker} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, width: 34, textAlign: 'right', color: isTop ? C.yes : isBot ? C.no : C.dim, fontWeight: isTop || isBot ? 700 : 400 }}>{s.ticker}</span>
+            <div style={{ flex: 1, height: 10, background: C.dimmer, borderRadius: 1, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct * 100}%`, background: col, opacity: 0.65 + pct * 0.35, boxShadow: isTop || isBot ? `0 0 6px ${col}` : 'none' }} />
+            </div>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: pos ? C.yes : C.no, width: 44, textAlign: 'right' }}>{pos ? '+' : ''}{(s.change1d || 0).toFixed(2)}%</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Tape({ data }) {
+  if (!data) return null;
+  const items = [
+    { l: 'SPY', v: data.spy?.price?.toFixed(2), c: data.spy?.change1d },
+    { l: 'QQQ', v: data.qqq?.price?.toFixed(2), c: data.qqq?.change1d },
+    { l: 'VIX', v: data.vix?.price?.toFixed(2), c: data.vix?.slope5d },
+    { l: 'TNX', v: data.tnx?.price ? data.tnx.price.toFixed(2)+'%' : '--', c: data.tnx?.change1d },
+    { l: 'DXY', v: data.dxy?.price?.toFixed(2), c: data.dxy?.change1d },
+    ...(data.sectors || []).slice(0, 6).map(s => ({ l: s.ticker, v: (s.change1d||0).toFixed(2)+'%', c: s.change1d })),
+  ];
+  const doubled = [...items, ...items].map((x, i) => (
+    <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginRight: 24 }}>
+      <span style={{ color: C.dim, fontSize: 10 }}>{x.l}</span>
+      <span style={{ color: C.text, fontSize: 10 }}>{x.v || '--'}</span>
+      {x.c != null && <span style={{ fontSize: 10, color: x.c >= 0 ? C.yes : C.no }}>{x.c >= 0 ? '▲' : '▼'}{Math.abs(x.c).toFixed(2)}</span>}
+    </span>
+  ));
+  return (
+    <div style={{ overflow: 'hidden', height: 22, display: 'flex', alignItems: 'center', borderBottom: `1px solid ${C.dimmer}`, background: C.bgPanel }}>
+      <div style={{ display: 'inline-flex', whiteSpace: 'nowrap', animation: 'ticker 50s linear infinite', fontFamily: 'Share Tech Mono' }}>{doubled}</div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// STOCK CARD (SCREENER)
+// ════════════════════════════════════════════════════════════
+
+function SMATag({ label, price, sma, color, visible }) {
+  if (!visible || sma == null) return null;
+  const pct = ((price - sma) / sma) * 100;
+  const pos = pct >= 0;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 0', borderBottom: `1px solid ${C.dimmer}` }}>
+      <div style={{ width: 3, height: 12, background: color, borderRadius: 1, flexShrink: 0 }} />
+      <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, width: 52 }}>{label}</span>
+      <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.text }}>{sma.toFixed(2)}</span>
+      <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: pos ? C.yes : C.no, marginLeft: 'auto' }}>{pos ? '+' : ''}{pct.toFixed(1)}%</span>
+    </div>
+  );
+}
+
+function VolumeBar({ volume, avgVol, visible }) {
+  if (!visible || !volume || !avgVol) return null;
+  const ratio = volume / avgVol;
+  const pct = Math.min(ratio * 50, 100);
+  const color = ratio > 1.5 ? C.yes : ratio > 0.75 ? C.caution : C.no;
+  const fmt = v => v >= 1e9 ? (v/1e9).toFixed(1)+'B' : v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v;
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>VOL {fmt(volume)}</span>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>20d avg {fmt(Math.round(avgVol))}</span>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color }}>{ratio.toFixed(2)}×</span>
+      </div>
+      <div style={{ height: 3, background: C.dimmer, borderRadius: 2 }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 2, boxShadow: ratio > 1.5 ? `0 0 4px ${color}` : 'none' }} />
+      </div>
+    </div>
+  );
+}
+
+function StockCard({ data, indicators, onRemove }) {
+  const pos = data.change1d >= 0;
+  const regime = data.price > data.sma200 ? 'ABOVE 200d' : data.price > data.sma50 ? 'ABOVE 50d' : 'BELOW MAs';
+  const regColor = data.price > data.sma200 ? C.yes : data.price > data.sma50 ? C.caution : C.no;
+  return (
+    <div className="fade-in" style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 6, padding: '12px 14px', marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 16, color: C.text, fontWeight: 700 }}>{data.symbol}</span>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, padding: '2px 6px', border: `1px solid ${regColor}40`, color: regColor }}>{regime}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 20, color: C.text }}>{data.price?.toFixed(2)}</span>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 12, color: pos ? C.yes : C.no }}>{pos ? '+' : ''}{data.change1d?.toFixed(2)}%</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+          {onRemove && (
+            <button onClick={onRemove} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '3px 8px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: 10, borderRadius: 3 }}>✕ REMOVE</button>
+          )}
+          <Sparkline closes={data.closes} width={90} height={32} showSMA={{ 20: indicators.sma20, 50: indicators.sma50 }} />
+        </div>
+      </div>
+      <div>
+        <SMATag label="SMA 20" price={data.price} sma={data.sma20} color={C.sma20} visible={indicators.sma20} />
+        <SMATag label="SMA 50" price={data.price} sma={data.sma50} color={C.sma50} visible={indicators.sma50} />
+        <SMATag label="SMA 100" price={data.price} sma={data.sma100} color={C.sma100} visible={indicators.sma100} />
+        <SMATag label="SMA 200" price={data.price} sma={data.sma200} color={C.sma200} visible={indicators.sma200} />
+        <VolumeBar volume={data.volume} avgVol={data.avgVol20} visible={indicators.volume} />
+        <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+          <div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>RSI(14)</div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 12, color: data.rsi14 > 70 ? C.no : data.rsi14 < 30 ? C.yes : C.text }}>{data.rsi14?.toFixed(0)}</div>
+          </div>
+          <div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>1Y %ILE</div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 12, color: C.text }}>{data.percentile1y}th</div>
+          </div>
+          <div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>5D SLOPE</div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 12, color: data.slope5d > 0 ? C.yes : C.no }}>{data.slope5d > 0 ? '+' : ''}{data.slope5d?.toFixed(2)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// AI ANALYSIS
+// ════════════════════════════════════════════════════════════
+
+async function getAIAnalysis(data, scores, decision, mode, anthropicKey) {
+  if (!anthropicKey) return '[ Set your Anthropic API key in Settings to enable AI analysis ]';
+  const prompt = `You are a professional stock market analyst writing a terminal-style briefing for ${mode} traders.
+
+Market data snapshot:
+- Decision: ${decision} | Market Quality Score: ${scores.total}%
+- VIX: ${data.vix?.price?.toFixed(1)} | SPY: ${data.spy?.price?.toFixed(2)} | RSI(14): ${data.spy?.rsi14?.toFixed(0)}
+- SPY vs MA200: ${data.spy?.price > data.spy?.sma200 ? 'ABOVE (+' + (((data.spy?.price - data.spy?.sma200)/data.spy?.sma200)*100).toFixed(1) + '%)' : 'BELOW'}
+- SPY vs MA50: ${data.spy?.price > data.spy?.sma50 ? 'ABOVE' : 'BELOW'} | TNX: ${data.tnx?.price?.toFixed(2)}% | DXY: ${data.dxy?.price?.toFixed(2)}
+- Sectors positive: ${(data.sectors||[]).filter(s=>s.change1d>0).length}/11
+- Score breakdown: Vol ${scores.volatility}% | Trend ${scores.trend}% | Breadth ${scores.breadth}% | Mom ${scores.momentum}% | Macro ${scores.macro}%
+- FOMC risk: ${data.fomcSoon ? 'YES — EVENT WITHIN 72H' : 'No'}
+- Mode: ${mode} TRADING
+
+Write exactly 3 sentences. Be specific about actual numbers and conditions. End with one concrete implication for position sizing or setup selection. No markdown, no bullets, plain prose only.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] }),
+    });
+    const json = await res.json();
+    return json.content?.[0]?.text || 'Analysis unavailable.';
+  } catch { return 'AI analysis failed. Check API key in Settings.'; }
+}
+
+// ════════════════════════════════════════════════════════════
+// DASHBOARD SCREEN
+// ════════════════════════════════════════════════════════════
+
+function DashboardScreen({ settings }) {
+  const [data, setData] = useState(null);
+  const [scores, setScores] = useState(null);
+  const [decision, setDecision] = useState(null);
+  const [analysis, setAnalysis] = useState('');
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [status, setStatus] = useState('LIVE');
+  const [secondsAgo, setSecondsAgo] = useState(0);
+  const timerRef = useRef(null);
+  const countRef = useRef(null);
+  const analysisRef = useRef('');
+
+  const refresh = useCallback(async () => {
+    setStatus('UPDATING');
+    setError(null);
+    try {
+      const d = await loadDashboardData(settings.fredKey);
+      const sc = {
+        volatility: scoreVolatility(d),
+        trend: scoreTrend(d),
+        breadth: scoreBreadth(d),
+        momentum: scoreMomentum(d),
+        macro: scoreMacro(d),
+      };
+      sc.total = computeMQS(sc);
+      const ew = Math.round((sc.trend * 0.4 + sc.momentum * 0.35 + sc.breadth * 0.25));
+      const dec = getDecision(sc.total, ew);
+      setData(d); setScores(sc); setDecision(dec);
+      setLoading(false); setStatus('LIVE'); setSecondsAgo(0);
+
+      setAnalysisLoading(true);
+      const ai = await getAIAnalysis(d, sc, dec, settings.mode, settings.anthropicKey);
+      setAnalysis(ai); setAnalysisLoading(false);
+    } catch (e) {
+      setError('Failed to load market data. Check network connection.'); setStatus('ERROR'); setLoading(false);
+    }
+  }, [settings]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { timerRef.current = setInterval(refresh, settings.refreshInterval || 45000); return () => clearInterval(timerRef.current); }, [refresh, settings.refreshInterval]);
+  useEffect(() => { countRef.current = setInterval(() => setSecondsAgo(s => s + 1), 1000); return () => clearInterval(countRef.current); }, [data]);
+
+  const spy = data?.spy; const regime = spy ? (spy.price > spy.sma200 && spy.price > spy.sma50 ? 'UPTREND' : spy.price < spy.sma200 && spy.price < spy.sma50 ? 'DOWNTREND' : 'CHOP') : '—';
+  const regColor = { UPTREND: C.yes, DOWNTREND: C.no, CHOP: C.caution }[regime] || C.dim;
+  const dec = decision || 'NO';
+  const subText = { YES: 'Full size · Press risk', CAUTION: 'Half size · A+ setups only', NO: 'Avoid · Preserve capital' }[dec];
+
+  return (
+    <div style={{ padding: '0 0 80px' }}>
+      {/* Status bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, padding: '2px 7px', border: `1px solid ${status === 'LIVE' ? C.yes : status === 'ERROR' ? C.no : C.caution}`, color: status === 'LIVE' ? C.yes : status === 'ERROR' ? C.no : C.caution, animation: status === 'UPDATING' ? 'pulse 0.8s infinite' : 'none' }}>{status}</span>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>{secondsAgo < 5 ? 'just now' : `${secondsAgo}s ago`}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, padding: '2px 8px', border: `1px solid ${regColor}30`, color: regColor }}>{regime}</span>
+          <button onClick={refresh} disabled={status === 'UPDATING'} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '3px 10px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: 9, borderRadius: 3 }}>⟳</button>
+        </div>
+      </div>
+
+      <Tape data={data} />
+
+      {/* FOMC Alert */}
+      {data?.fomcSoon && (
+        <div style={{ background: 'rgba(255,184,0,0.06)', border: `1px solid ${C.caution}`, borderRadius: 0, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, color: C.caution, animation: 'pulse 1.5s infinite' }}>⚠</span>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.caution }}>FOMC EVENT WITHIN 72H — Reduce position size</span>
+        </div>
+      )}
+
+      {error && (
+        <div style={{ margin: '12px 14px', padding: '10px 12px', background: 'rgba(255,59,92,0.06)', border: `1px solid ${C.no}`, borderRadius: 4 }}>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.no }}>{error}</span>
+        </div>
+      )}
+
+      <div style={{ padding: '14px' }}>
+        {/* HERO */}
+        <div style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 6, padding: '20px 16px', marginBottom: 12, textAlign: 'center' }}>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.14em', marginBottom: 14 }}>SHOULD I TRADE RIGHT NOW?</div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+            {loading ? <Sk w={180} h={48} style={{ borderRadius: 4 }} /> : <Badge decision={dec} />}
+            {loading ? <Sk w={160} h={160} style={{ borderRadius: '50%' }} /> : <Gauge score={scores?.total || 0} decision={dec} size={156} />}
+            {!loading && <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: dec === 'YES' ? C.yes : dec === 'CAUTION' ? C.caution : C.no, opacity: 0.8 }}>{subText}</div>}
+          </div>
+        </div>
+
+        {/* SCORE BREAKDOWN */}
+        {!loading && scores && (
+          <Panel title="SCORE BREAKDOWN" pad="14px">
+            <ScoreBar label="VOLATILITY" score={scores.volatility} weight="25%" color={scoreColor(scores.volatility)} />
+            <ScoreBar label="MOMENTUM" score={scores.momentum} weight="25%" color={scoreColor(scores.momentum)} />
+            <ScoreBar label="TREND" score={scores.trend} weight="20%" color={scoreColor(scores.trend)} />
+            <ScoreBar label="BREADTH" score={scores.breadth} weight="20%" color={scoreColor(scores.breadth)} />
+            <ScoreBar label="MACRO" score={scores.macro} weight="10%" color={scoreColor(scores.macro)} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTop: `1px solid ${C.dimmer}` }}>
+              <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>WEIGHTED TOTAL</span>
+              <span style={{ fontFamily: 'Share Tech Mono', fontSize: 12, color: scoreColor(scores.total), fontWeight: 700 }}>{scores.total}%</span>
+            </div>
+          </Panel>
+        )}
+
+        {/* DATA PANELS GRID */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
+
+          {/* VOLATILITY */}
+          <Panel title="VOLATILITY" score={scores?.volatility}>
+            {loading ? <><Sk h={12} /><Sk h={12} style={{marginTop:6}} /><Sk h={12} style={{marginTop:6}} /></> : (
+              <>
+                <Row label="VIX" value={data?.vix?.price?.toFixed(2) || '--'} up={data?.vix?.price < 20} status={data?.vix?.price > 25 ? 'elevated' : data?.vix?.price < 15 ? 'low' : 'neutral'} />
+                <Row label="VIX 5D" value={data?.vix?.slope5d > 0 ? `+${data?.vix?.slope5d?.toFixed(2)}` : data?.vix?.slope5d?.toFixed(2)} up={data?.vix?.slope5d < 0} status={data?.vix?.slope5d > 1 ? 'risk-off' : data?.vix?.slope5d < -0.5 ? 'healthy' : 'neutral'} />
+                <Row label="1Y %ILE" value={`${data?.vix?.percentile1y || '--'}th`} up={data?.vix?.percentile1y < 50} status={data?.vix?.percentile1y > 75 ? 'risk-off' : data?.vix?.percentile1y < 35 ? 'healthy' : 'neutral'} />
+              </>
+            )}
+          </Panel>
+
+          {/* TREND */}
+          <Panel title="TREND" score={scores?.trend}>
+            {loading ? <><Sk h={12} /><Sk h={12} style={{marginTop:6}} /><Sk h={12} style={{marginTop:6}} /></> : (
+              <>
+                <Row label="vs MA200" value={spy?.price > spy?.sma200 ? 'ABOVE' : 'BELOW'} up={spy?.price > spy?.sma200} sub={spy?.sma200 ? spy.sma200.toFixed(0) : ''} status={spy?.price > spy?.sma200 ? 'healthy' : 'risk-off'} />
+                <Row label="vs MA50" value={spy?.price > spy?.sma50 ? 'ABOVE' : 'BELOW'} up={spy?.price > spy?.sma50} status={spy?.price > spy?.sma50 ? 'healthy' : 'weakening'} />
+                <Row label="RSI(14)" value={spy?.rsi14?.toFixed(0)} up={spy?.rsi14 > 50} status={spy?.rsi14 > 70 ? 'elevated' : spy?.rsi14 < 30 ? 'risk-off' : spy?.rsi14 > 55 ? 'healthy' : 'neutral'} />
+              </>
+            )}
+          </Panel>
+
+          {/* BREADTH */}
+          <Panel title="BREADTH" score={scores?.breadth}>
+            {loading ? <><Sk h={12} /><Sk h={12} style={{marginTop:6}} /><Sk h={12} style={{marginTop:6}} /></> : (
+              <>
+                <Row label="Sects >50d" value={`${(data?.sectors||[]).filter(s=>s.price>s.sma50).length}/11`} up={(data?.sectors||[]).filter(s=>s.price>s.sma50).length > 6} status={(data?.sectors||[]).filter(s=>s.price>s.sma50).length > 7 ? 'healthy' : 'weakening'} />
+                <Row label="Sects >200d" value={`${(data?.sectors||[]).filter(s=>s.price>s.sma200).length}/11`} up={(data?.sectors||[]).filter(s=>s.price>s.sma200).length > 6} status={(data?.sectors||[]).filter(s=>s.price>s.sma200).length > 7 ? 'healthy' : 'weakening'} />
+                <Row label="Sects +ve" value={`${(data?.sectors||[]).filter(s=>s.change1d>0).length}/11`} up={(data?.sectors||[]).filter(s=>s.change1d>0).length > 6} status={(data?.sectors||[]).filter(s=>s.change1d>0).length > 7 ? 'bullish' : 'neutral'} />
+              </>
+            )}
+          </Panel>
+
+          {/* MACRO */}
+          <Panel title="MACRO" score={scores?.macro}>
+            {loading ? <><Sk h={12} /><Sk h={12} style={{marginTop:6}} /><Sk h={12} style={{marginTop:6}} /></> : (
+              <>
+                <Row label="10Y Yield" value={data?.tnx?.price ? `${data.tnx.price.toFixed(2)}%` : '--'} up={data?.tnx?.price < 4.5} status={data?.tnx?.price > 4.8 ? 'risk-off' : data?.tnx?.price > 4.3 ? 'weakening' : 'neutral'} />
+                <Row label="DXY" value={data?.dxy?.price?.toFixed(2) || '--'} up={data?.dxy?.price < 104} status={data?.dxy?.price > 107 ? 'risk-off' : 'neutral'} />
+                <Row label="FOMC Risk" value={data?.fomcSoon ? 'WITHIN 72H' : 'CLEAR'} status={data?.fomcSoon ? 'risk-off' : 'healthy'} />
+              </>
+            )}
+          </Panel>
+        </div>
+
+        {/* SECTOR HEATMAP */}
+        <div style={{ marginTop: 12 }}>
+          <Panel title="SECTOR HEATMAP — 11 ETFs">
+            {loading ? <Sk h={220} /> : <SectorBar sectors={data?.sectors} />}
+          </Panel>
+        </div>
+
+        {/* SPY SPARKLINE */}
+        {!loading && spy?.closes?.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <Panel title={`SPY PRICE CHART — ${spy.closes.length}D | MA20 MA50 MA200`}>
+              <Sparkline closes={spy.closes} width={Math.min(window.innerWidth - 62, 500)} height={80}
+                showSMA={{ 20: true, 50: true, 200: true }} />
+              <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+                {[['MA20', C.sma20, spy.sma20], ['MA50', C.sma50, spy.sma50], ['MA100', C.sma100, spy.sma100], ['MA200', C.sma200, spy.sma200]].map(([l, c, v]) => (
+                  <span key={l} style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: c }}>● {l}: {v?.toFixed(2) || '--'}</span>
+                ))}
+              </div>
+            </Panel>
+          </div>
+        )}
+
+        {/* AI ANALYSIS */}
+        <div style={{ marginTop: 12, marginBottom: 12 }}>
+          <Panel title="TERMINAL ANALYSIS — AI LAYER">
+            {loading || analysisLoading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <Sk h={11} /><Sk h={11} w="90%" /><Sk h={11} w="75%" />
+              </div>
+            ) : (
+              <div className="fade-in" style={{ fontFamily: 'Share Tech Mono', fontSize: 11, color: C.textMid, lineHeight: 1.75 }}>{analysis}</div>
+            )}
+          </Panel>
+        </div>
+
+        <div style={{ textAlign: 'center', padding: '8px 0', borderTop: `1px solid ${C.dimmer}` }}>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dimmer }}>DATA: YAHOO FINANCE · FRED · NOT FINANCIAL ADVICE</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// SCREENER SCREEN
+// ════════════════════════════════════════════════════════════
+
+const DEFAULT_INDICATORS = { sma20: true, sma50: true, sma100: false, sma200: true, volume: true };
+
+function ScreenerScreen() {
+  const [stocks, setStocks] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('screener_stocks') || JSON.stringify(DEFAULT_SCREENER)); } catch { return DEFAULT_SCREENER; }
+  });
+  const [indicators, setIndicators] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('screener_indicators') || JSON.stringify(DEFAULT_INDICATORS)); } catch { return DEFAULT_INDICATORS; }
+  });
+  const [data, setData] = useState({});
+  const [loadingMap, setLoadingMap] = useState({});
+  const [input, setInput] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => { localStorage.setItem('screener_stocks', JSON.stringify(stocks)); }, [stocks]);
+  useEffect(() => { localStorage.setItem('screener_indicators', JSON.stringify(indicators)); }, [indicators]);
+
+  const fetchStock = useCallback(async (sym) => {
+    const s = sym.toUpperCase().trim();
+    setLoadingMap(m => ({ ...m, [s]: true }));
+    try {
+      const d = await loadStockData(s);
+      setData(prev => ({ ...prev, [s]: { ...d, symbol: s } }));
+    } catch {
+      setData(prev => ({ ...prev, [s]: { symbol: s, error: true } }));
+    }
+    setLoadingMap(m => ({ ...m, [s]: false }));
+  }, []);
+
+  useEffect(() => {
+    stocks.forEach(s => { if (!data[s]) fetchStock(s); });
+  }, [stocks]);
+
+  const addStock = () => {
+    const sym = input.toUpperCase().trim();
+    if (!sym) return;
+    if (stocks.includes(sym)) { setError('Already in screener'); setTimeout(() => setError(''), 2000); return; }
+    setStocks(prev => [...prev, sym]);
+    fetchStock(sym);
+    setInput('');
+    setError('');
+  };
+
+  const removeStock = (sym) => {
+    setStocks(prev => prev.filter(s => s !== sym));
+    setData(prev => { const n = { ...prev }; delete n[sym]; return n; });
+  };
+
+  const toggleIndicator = (key) => setIndicators(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const refreshAll = () => { setData({}); stocks.forEach(s => fetchStock(s)); };
+
+  const indicatorBtns = [
+    { key: 'sma20', label: 'SMA20', color: C.sma20 },
+    { key: 'sma50', label: 'SMA50', color: C.sma50 },
+    { key: 'sma100', label: 'SMA100', color: C.sma100 },
+    { key: 'sma200', label: 'SMA200', color: C.sma200 },
+    { key: 'volume', label: 'VOL', color: C.yes },
+  ];
+
+  return (
+    <div style={{ padding: '0 0 80px' }}>
+      {/* Header */}
+      <div style={{ background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}`, padding: '10px 14px' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value.toUpperCase())}
+            onKeyDown={e => e.key === 'Enter' && addStock()}
+            placeholder="ADD TICKER (e.g. AAPL)"
+            style={{
+              flex: 1, background: C.bgPanel, border: `1px solid ${C.dimmer}`, color: C.text, padding: '9px 12px',
+              fontFamily: 'Share Tech Mono', fontSize: 13, borderRadius: 4,
+            }}
+          />
+          <button onClick={addStock} style={{ background: C.blue, border: 'none', color: '#000', padding: '9px 16px', fontFamily: 'Share Tech Mono', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 4 }}>+ ADD</button>
+          <button onClick={refreshAll} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '9px 12px', fontFamily: 'Share Tech Mono', fontSize: 11, cursor: 'pointer', borderRadius: 4 }}>⟳</button>
+        </div>
+        {error && <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.no, marginBottom: 8 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {indicatorBtns.map(({ key, label, color }) => (
+            <button key={key} onClick={() => toggleIndicator(key)} style={{
+              background: indicators[key] ? `${color}18` : 'transparent',
+              border: `1px solid ${indicators[key] ? color : C.dimmer}`,
+              color: indicators[key] ? color : C.dim,
+              padding: '4px 10px', fontFamily: 'Share Tech Mono', fontSize: 10, cursor: 'pointer', borderRadius: 3,
+              boxShadow: indicators[key] ? `0 0 6px ${color}40` : 'none',
+            }}>{indicators[key] ? '●' : '○'} {label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: '12px 14px' }}>
+        {stocks.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: C.dim, fontFamily: 'Share Tech Mono', fontSize: 12 }}>
+            No stocks in screener. Add a ticker above.
+          </div>
+        )}
+        {stocks.map(sym => {
+          const d = data[sym];
+          if (loadingMap[sym] || !d) return (
+            <div key={sym} style={{ marginBottom: 10 }}>
+              <div style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 6, padding: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontFamily: 'Share Tech Mono', fontSize: 16, color: C.text }}>{sym}</span>
+                  <div style={{ width: 16, height: 16, border: `2px solid ${C.blue}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                </div>
+                <Sk h={12} /><Sk h={12} style={{ marginTop: 8 }} /><Sk h={12} style={{ marginTop: 8 }} />
+              </div>
+            </div>
+          );
+          if (d.error) return (
+            <div key={sym} style={{ marginBottom: 10, background: C.bgPanel, border: `1px solid ${C.no}20`, borderRadius: 6, padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontFamily: 'Share Tech Mono', fontSize: 14, color: C.no }}>{sym}</span>
+                <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, marginTop: 4 }}>Failed to load data</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => fetchStock(sym)} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '4px 10px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: 9, borderRadius: 3 }}>↻ RETRY</button>
+                <button onClick={() => removeStock(sym)} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '4px 10px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: 9, borderRadius: 3 }}>✕</button>
+              </div>
+            </div>
+          );
+          return <StockCard key={sym} data={d} indicators={indicators} onRemove={() => removeStock(sym)} />;
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// SETTINGS SCREEN
+// ════════════════════════════════════════════════════════════
+
+function SettingsScreen({ settings, onSave }) {
+  const [form, setForm] = useState(settings);
+  const [saved, setSaved] = useState(false);
+
+  const save = () => {
+    onSave(form);
+    localStorage.setItem('app_settings', JSON.stringify(form));
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
+  };
+
+  const Field = ({ label, k, placeholder, type = 'text', note }) => (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, display: 'block', marginBottom: 5, letterSpacing: '0.1em' }}>{label}</label>
+      <input
+        type={type} value={form[k] || ''} onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))}
+        placeholder={placeholder}
+        style={{ width: '100%', background: C.bgPanel, border: `1px solid ${C.dimmer}`, color: C.text, padding: '10px 12px', fontFamily: 'Share Tech Mono', fontSize: 12, borderRadius: 4 }}
+      />
+      {note && <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginTop: 4 }}>{note}</div>}
+    </div>
+  );
+
+  return (
+    <div style={{ padding: '16px 14px 80px' }}>
+      <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, letterSpacing: '0.12em', marginBottom: 20, paddingBottom: 10, borderBottom: `1px solid ${C.dimmer}` }}>CONFIGURATION</div>
+
+      <Panel title="TRADING MODE" pad="14px">
+        <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+          {['SWING', 'DAY'].map(m => (
+            <button key={m} onClick={() => setForm(p => ({ ...p, mode: m }))} style={{
+              flex: 1, padding: '10px', background: form.mode === m ? '#0d2a40' : 'transparent',
+              border: `1px solid ${form.mode === m ? C.blue : C.dimmer}`,
+              color: form.mode === m ? C.blue : C.dim, cursor: 'pointer',
+              fontFamily: 'Share Tech Mono', fontSize: 11, borderRadius: 4,
+            }}>{m}</button>
+          ))}
+        </div>
+        <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginTop: 8 }}>Affects scoring thresholds and AI analysis tone</div>
+      </Panel>
+
+      <div style={{ marginTop: 16 }}>
+        <Panel title="API KEYS" pad="14px">
+          <Field k="anthropicKey" label="ANTHROPIC API KEY" placeholder="sk-ant-..." type="password"
+            note="Powers the AI terminal analysis. Get free key at console.anthropic.com" />
+          <Field k="fredKey" label="FRED API KEY (OPTIONAL)" placeholder="Your FRED API key"
+            note="Enhances macro data (Fed Funds rate). Free at fred.stlouisfed.org" />
+        </Panel>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <Panel title="REFRESH" pad="14px">
+          <div style={{ marginBottom: 4 }}>
+            <label style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, display: 'block', marginBottom: 8 }}>AUTO-REFRESH INTERVAL</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[30, 45, 60, 120].map(s => (
+                <button key={s} onClick={() => setForm(p => ({ ...p, refreshInterval: s * 1000 }))} style={{
+                  flex: 1, padding: '8px 4px', background: form.refreshInterval === s * 1000 ? '#0d2a40' : 'transparent',
+                  border: `1px solid ${form.refreshInterval === s * 1000 ? C.blue : C.dimmer}`,
+                  color: form.refreshInterval === s * 1000 ? C.blue : C.dim, cursor: 'pointer',
+                  fontFamily: 'Share Tech Mono', fontSize: 10, borderRadius: 4,
+                }}>{s}s</button>
+              ))}
+            </div>
+          </div>
+        </Panel>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <Panel title="DATA SOURCES" pad="14px">
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.textMid, lineHeight: 1.8 }}>
+            <div>● <span style={{ color: C.yes }}>Yahoo Finance</span> — Prices, OHLCV, SMAs (via CORS proxy)</div>
+            <div>● <span style={{ color: C.yes }}>FRED API</span> — Fed Funds rate (optional key)</div>
+            <div>● <span style={{ color: C.caution }}>Breadth data</span> — Approximated from sector ETFs</div>
+            <div>● <span style={{ color: C.caution }}>Put/Call ratio</span> — Derived from VIX regime</div>
+          </div>
+          <div style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(0,136,204,0.06)', border: `1px solid ${C.blue}30`, borderRadius: 4 }}>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, lineHeight: 1.7 }}>
+              For true breadth data (% above 200d MA), consider upgrading to Polygon.io or Nasdaq Data Link. For institutional accuracy, FactSet or Bloomberg Terminal APIs provide tick-level breadth.
+            </div>
+          </div>
+        </Panel>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <Panel title="INSTALL AS APP" pad="14px">
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.textMid, lineHeight: 1.9 }}>
+            <div style={{ color: C.yes, marginBottom: 6 }}>Samsung S24 Ultra — Chrome:</div>
+            <div>1. Open Chrome → tap ⋮ menu</div>
+            <div>2. Tap "Add to Home screen"</div>
+            <div>3. Tap "Add" → app appears on home</div>
+            <div style={{ color: C.yes, marginTop: 10, marginBottom: 6 }}>Samsung Internet:</div>
+            <div>1. Tap ≡ menu → "Add page to"</div>
+            <div>2. Select "Home screen"</div>
+          </div>
+        </Panel>
+      </div>
+
+      <button onClick={save} style={{
+        width: '100%', marginTop: 20, padding: '14px', background: saved ? C.yes : C.blue,
+        border: 'none', color: '#000', fontFamily: 'Share Tech Mono', fontSize: 14, fontWeight: 700,
+        cursor: 'pointer', borderRadius: 6, transition: 'background 0.3s',
+        boxShadow: `0 0 20px ${saved ? C.yes : C.blue}40`,
+      }}>{saved ? '✓ SAVED' : 'SAVE SETTINGS'}</button>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// APP SHELL
+// ════════════════════════════════════════════════════════════
+
+const DEFAULT_SETTINGS = { mode: 'SWING', anthropicKey: '', fredKey: '', refreshInterval: 45000 };
+
+export default function App() {
+  const [tab, setTab] = useState('dashboard');
+  const [settings, setSettings] = useState(() => {
+    try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('app_settings') || '{}') }; } catch { return DEFAULT_SETTINGS; }
+  });
+
+  // Safe area for notch/gesture bar on modern phones
+  const safeBottom = 'env(safe-area-inset-bottom, 0px)';
+
+  const tabs = [
+    { id: 'dashboard', label: 'DASHBOARD', icon: '◉' },
+    { id: 'screener', label: 'SCREENER', icon: '≡' },
+    { id: 'settings', label: 'SETTINGS', icon: '⚙' },
+  ];
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, fontFamily: 'Share Tech Mono' }}>
+      {/* Header */}
+      <div style={{ background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}`, padding: '10px 16px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: 13, color: C.text, fontWeight: 700, letterSpacing: '0.1em' }}>◈ SHOULD I BE TRADING?</div>
+          <div style={{ fontSize: 9, color: C.dim, marginTop: 1 }}>{settings.mode} MODE · BLOOMBERG TERMINAL</div>
+        </div>
+        <div style={{ fontSize: 9, color: C.dim, textAlign: 'right' }}>
+          <div style={{ color: C.yes }}>● LIVE</div>
+          <div style={{ marginTop: 1 }}>YAHOO · FRED</div>
+        </div>
+      </div>
+
+      {/* Screens */}
+      <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+        <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', display: tab === 'dashboard' ? 'block' : 'none' }}>
+          <DashboardScreen settings={settings} />
+        </div>
+        <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', display: tab === 'screener' ? 'block' : 'none' }}>
+          <ScreenerScreen />
+        </div>
+        <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', display: tab === 'settings' ? 'block' : 'none' }}>
+          <SettingsScreen settings={settings} onSave={setSettings} />
+        </div>
+      </div>
+
+      {/* Bottom Nav */}
+      <div style={{
+        background: C.bgPanel, borderTop: `1px solid ${C.dimmer}`,
+        display: 'flex', flexShrink: 0,
+        paddingBottom: safeBottom,
+      }}>
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            padding: '10px 0', background: 'none', border: 'none', cursor: 'pointer',
+            borderTop: tab === t.id ? `2px solid ${C.blue}` : '2px solid transparent',
+          }}>
+            <span style={{ fontSize: 16, color: tab === t.id ? C.blue : C.dim, marginBottom: 2 }}>{t.icon}</span>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: tab === t.id ? C.blue : C.dim, letterSpacing: '0.08em' }}>{t.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Mount
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+  </script>
+
+  <script>
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
