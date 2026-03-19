@@ -338,20 +338,64 @@ const THEMES = {
 };
 let C = THEMES.dark;
 
+const DIMS = {
+  mobile: {
+    tickerH: 30, tickerFont: 12, tickerGap: 20,
+    panelTitle: 10, panelHdrPad: '8px 14px', panelBodyPad: '12px 14px',
+    rowLabel: 10, rowValue: 12, rowStatus: 9, rowPad: '6px 0',
+    scoreLabel: 10, scoreVal: 10, barH: 3,
+    sectorLabel: 10, sectorPct: 10, sectorBarH: 10,
+    hdrTitle: 13, hdrSub: 9, hdrPad: '10px 16px',
+    navIcon: 16, navLabel: 9, navPad: '10px 0',
+    statusFont: 9,
+    cardSymbol: 16, cardPrice: 20, cardChange: 12, cardPad: '12px 14px',
+    sparkW: 90, sparkH: 32,
+    aiFont: 11,
+    contentPad: '14px', contentMax: undefined,
+    gridCols: '1fr 1fr', gridGap: 10,
+    badgeFont: 22, badgePad: '10px 22px',
+    gaugeSize: 156,
+    heroGap: 14, heroDir: 'column',
+    chartH: 80, chartMaxW: 500,
+    maLegend: 9,
+  },
+  desktop: {
+    tickerH: 38, tickerFont: 13, tickerGap: 32,
+    panelTitle: 12, panelHdrPad: '10px 18px', panelBodyPad: '14px 18px',
+    rowLabel: 12, rowValue: 14, rowStatus: 10, rowPad: '8px 0',
+    scoreLabel: 12, scoreVal: 12, barH: 5,
+    sectorLabel: 12, sectorPct: 12, sectorBarH: 14,
+    hdrTitle: 16, hdrSub: 11, hdrPad: '12px 24px',
+    navIcon: 18, navLabel: 11, navPad: '12px 0',
+    statusFont: 11,
+    cardSymbol: 20, cardPrice: 24, cardChange: 14, cardPad: '16px 18px',
+    sparkW: 120, sparkH: 40,
+    aiFont: 13,
+    contentPad: '24px 32px', contentMax: 1400,
+    gridCols: 'repeat(4, 1fr)', gridGap: 14,
+    badgeFont: 28, badgePad: '14px 32px',
+    gaugeSize: 200,
+    heroGap: 48, heroDir: 'row',
+    chartH: 140, chartMaxW: 1200,
+    maLegend: 11,
+  },
+};
+let D = DIMS.mobile;
+
 function scoreColor(s) { return s >= 70 ? C.yes : s >= 50 ? C.caution : C.no; }
 
 function Sk({ w = '100%', h = 14, style = {} }) {
   return <div className="skel" style={{ width: w, height: h, ...style }} />;
 }
 
-function Panel({ title, score, children, pad = '12px 14px' }) {
+function Panel({ title, score, children, pad }) {
   return (
     <div style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4, overflow: 'hidden', transition: 'background 0.3s, border-color 0.3s' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', borderBottom: `1px solid ${C.dimmer}`, transition: 'border-color 0.3s' }}>
-        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, letterSpacing: '0.12em' }}>{title}</span>
-        {score !== undefined && <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: scoreColor(score), fontWeight: 700 }}>{Math.round(score)}%</span>}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: D.panelHdrPad, borderBottom: `1px solid ${C.dimmer}`, transition: 'border-color 0.3s' }}>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.panelTitle, color: C.dim, letterSpacing: '0.12em' }}>{title}</span>
+        {score !== undefined && <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.panelTitle, color: scoreColor(score), fontWeight: 700 }}>{Math.round(score)}%</span>}
       </div>
-      <div style={{ padding: pad }}>{children}</div>
+      <div style={{ padding: pad || D.panelBodyPad }}>{children}</div>
     </div>
   );
 }
@@ -366,13 +410,13 @@ function Row({ label, value, sub, up, status }) {
   };
   const sColor = statusMap[status] || C.dim;
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: `1px solid ${C.dimmer}` }}>
-      <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim }}>{label}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: D.rowPad, borderBottom: `1px solid ${C.dimmer}` }}>
+      <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.dim }}>{label}</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {status && <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: sColor, textTransform: 'uppercase' }}>{status}</span>}
-        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 12, color: C.text, fontWeight: 700 }}>{value}</span>
-        {up !== undefined && <span style={{ color: dirColor, fontSize: 11, fontWeight: 700 }}>{arrow}</span>}
-        {sub && <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>{sub}</span>}
+        {status && <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: sColor, textTransform: 'uppercase' }}>{status}</span>}
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowValue, color: C.text, fontWeight: 700 }}>{value}</span>
+        {up !== undefined && <span style={{ color: dirColor, fontSize: D.rowValue - 1, fontWeight: 700 }}>{arrow}</span>}
+        {sub && <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim }}>{sub}</span>}
       </div>
     </div>
   );
@@ -407,10 +451,10 @@ function Badge({ decision }) {
   }[decision] || { col: C.dim, label: '— LOADING', bg: 'transparent' };
   return (
     <div style={{
-      display: 'inline-flex', alignItems: 'center', padding: '10px 22px',
+      display: 'inline-flex', alignItems: 'center', padding: D.badgePad,
       border: `2px solid ${cfg.col}`, background: cfg.bg,
       boxShadow: `0 0 24px ${cfg.col}40`,
-      fontFamily: 'Share Tech Mono', fontSize: 22, color: cfg.col,
+      fontFamily: 'Share Tech Mono', fontSize: D.badgeFont, color: cfg.col,
       letterSpacing: '0.12em', borderRadius: 3,
       animation: 'glow 3s ease-in-out infinite',
     }}>{cfg.label}</div>
@@ -419,12 +463,12 @@ function Badge({ decision }) {
 
 function ScoreBar({ label, score, weight, color }) {
   return (
-    <div style={{ marginBottom: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim }}>{label} <span style={{ color: C.dimmer }}>×{weight}</span></span>
-        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.textMid }}>{Math.round(score)}%</span>
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.scoreLabel, color: C.dim }}>{label} <span style={{ color: C.dimmer }}>x{weight}</span></span>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.scoreVal, color: C.textMid }}>{Math.round(score)}%</span>
       </div>
-      <div style={{ height: 3, background: C.dimmer, borderRadius: 2 }}>
+      <div style={{ height: D.barH, background: C.dimmer, borderRadius: 2 }}>
         <div style={{ height: '100%', width: `${score}%`, background: color, borderRadius: 2, transition: 'width 1.2s ease', boxShadow: `0 0 4px ${color}80` }} />
       </div>
     </div>
@@ -443,12 +487,12 @@ function SectorBar({ sectors }) {
         const col = pos ? C.yes : C.no;
         const isTop = i < 3, isBot = i >= sorted.length - 3;
         return (
-          <div key={s.ticker} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, width: 34, textAlign: 'right', color: isTop ? C.yes : isBot ? C.no : C.dim, fontWeight: isTop || isBot ? 700 : 400 }}>{s.ticker}</span>
-            <div style={{ flex: 1, height: 10, background: C.dimmer, borderRadius: 1, overflow: 'hidden' }}>
+          <div key={s.ticker} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.sectorLabel, width: 42, textAlign: 'right', color: isTop ? C.yes : isBot ? C.no : C.dim, fontWeight: isTop || isBot ? 700 : 400 }}>{s.ticker}</span>
+            <div style={{ flex: 1, height: D.sectorBarH, background: C.dimmer, borderRadius: 1, overflow: 'hidden' }}>
               <div style={{ height: '100%', width: `${pct * 100}%`, background: col, opacity: 0.65 + pct * 0.35, boxShadow: isTop || isBot ? `0 0 6px ${col}` : 'none' }} />
             </div>
-            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: pos ? C.yes : C.no, width: 44, textAlign: 'right' }}>{pos ? '+' : ''}{(s.change1d || 0).toFixed(2)}%</span>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.sectorPct, color: pos ? C.yes : C.no, width: 52, textAlign: 'right' }}>{pos ? '+' : ''}{(s.change1d || 0).toFixed(2)}%</span>
           </div>
         );
       })}
@@ -467,14 +511,14 @@ function Tape({ data }) {
     ...(data.sectors || []).slice(0, 6).map(s => ({ l: s.ticker, v: (s.change1d||0).toFixed(2)+'%', c: s.change1d })),
   ];
   const doubled = [...items, ...items].map((x, i) => (
-    <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginRight: 24 }}>
-      <span style={{ color: C.dim, fontSize: 10 }}>{x.l}</span>
-      <span style={{ color: C.text, fontSize: 10 }}>{x.v || '--'}</span>
-      {x.c != null && <span style={{ fontSize: 10, color: x.c >= 0 ? C.yes : C.no }}>{x.c >= 0 ? '▲' : '▼'}{Math.abs(x.c).toFixed(2)}</span>}
+    <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: D.tickerGap }}>
+      <span style={{ color: C.textMid, fontSize: D.tickerFont, fontWeight: 700, letterSpacing: '0.04em' }}>{x.l}</span>
+      <span style={{ color: C.text, fontSize: D.tickerFont, fontWeight: 400 }}>{x.v || '--'}</span>
+      {x.c != null && <span style={{ fontSize: D.tickerFont, fontWeight: 700, color: x.c >= 0 ? C.yes : C.no }}>{x.c >= 0 ? '▲' : '▼'} {Math.abs(x.c).toFixed(2)}</span>}
     </span>
   ));
   return (
-    <div style={{ overflow: 'hidden', height: 22, display: 'flex', alignItems: 'center', borderBottom: `1px solid ${C.dimmer}`, background: C.bgPanel }}>
+    <div style={{ overflow: 'hidden', height: D.tickerH, display: 'flex', alignItems: 'center', borderBottom: `1px solid ${C.dimmer}`, background: C.bgPanel, transition: 'background 0.3s' }}>
       <div style={{ display: 'inline-flex', whiteSpace: 'nowrap', animation: 'ticker 50s linear infinite', fontFamily: 'Share Tech Mono' }}>{doubled}</div>
     </div>
   );
@@ -489,11 +533,11 @@ function SMATag({ label, price, sma, color, visible }) {
   const pct = ((price - sma) / sma) * 100;
   const pos = pct >= 0;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 0', borderBottom: `1px solid ${C.dimmer}` }}>
-      <div style={{ width: 3, height: 12, background: color, borderRadius: 1, flexShrink: 0 }} />
-      <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, width: 52 }}>{label}</span>
-      <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.text }}>{sma.toFixed(2)}</span>
-      <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: pos ? C.yes : C.no, marginLeft: 'auto' }}>{pos ? '+' : ''}{pct.toFixed(1)}%</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', borderBottom: `1px solid ${C.dimmer}` }}>
+      <div style={{ width: 3, height: D.rowValue, background: color, borderRadius: 1, flexShrink: 0 }} />
+      <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.dim, width: 60 }}>{label}</span>
+      <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.text }}>{sma.toFixed(2)}</span>
+      <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: pos ? C.yes : C.no, marginLeft: 'auto' }}>{pos ? '+' : ''}{pct.toFixed(1)}%</span>
     </div>
   );
 }
@@ -505,13 +549,13 @@ function VolumeBar({ volume, avgVol, visible }) {
   const color = ratio > 1.5 ? C.yes : ratio > 0.75 ? C.caution : C.no;
   const fmt = v => v >= 1e9 ? (v/1e9).toFixed(1)+'B' : v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v;
   return (
-    <div style={{ marginTop: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>VOL {fmt(volume)}</span>
-        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>20d avg {fmt(Math.round(avgVol))}</span>
-        <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color }}>{ratio.toFixed(2)}×</span>
+    <div style={{ marginTop: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim }}>VOL {fmt(volume)}</span>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim }}>20d avg {fmt(Math.round(avgVol))}</span>
+        <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color }}>{ratio.toFixed(2)}x</span>
       </div>
-      <div style={{ height: 3, background: C.dimmer, borderRadius: 2 }}>
+      <div style={{ height: D.barH, background: C.dimmer, borderRadius: 2 }}>
         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 2, boxShadow: ratio > 1.5 ? `0 0 4px ${color}` : 'none' }} />
       </div>
     </div>
@@ -523,23 +567,23 @@ function StockCard({ data, indicators, onRemove }) {
   const regime = data.price > data.sma200 ? 'ABOVE 200d' : data.price > data.sma50 ? 'ABOVE 50d' : 'BELOW MAs';
   const regColor = data.price > data.sma200 ? C.yes : data.price > data.sma50 ? C.caution : C.no;
   return (
-    <div className="fade-in" style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 6, padding: '12px 14px', marginBottom: 10 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+    <div className="fade-in" style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 6, padding: D.cardPad, marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 16, color: C.text, fontWeight: 700 }}>{data.symbol}</span>
-            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, padding: '2px 6px', border: `1px solid ${regColor}40`, color: regColor }}>{regime}</span>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.cardSymbol, color: C.text, fontWeight: 700 }}>{data.symbol}</span>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, padding: '2px 8px', border: `1px solid ${regColor}40`, color: regColor }}>{regime}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
-            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 20, color: C.text }}>{data.price?.toFixed(2)}</span>
-            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 12, color: pos ? C.yes : C.no }}>{pos ? '+' : ''}{data.change1d?.toFixed(2)}%</span>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.cardPrice, color: C.text }}>{data.price?.toFixed(2)}</span>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.cardChange, color: pos ? C.yes : C.no }}>{pos ? '+' : ''}{data.change1d?.toFixed(2)}%</span>
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
           {onRemove && (
-            <button onClick={onRemove} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '3px 8px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: 10, borderRadius: 3 }}>✕ REMOVE</button>
+            <button onClick={onRemove} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '4px 10px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, borderRadius: 3 }}>✕ REMOVE</button>
           )}
-          <Sparkline closes={data.closes} width={90} height={32} showSMA={{ 20: indicators.sma20, 50: indicators.sma50 }} />
+          <Sparkline closes={data.closes} width={D.sparkW} height={D.sparkH} showSMA={{ 20: indicators.sma20, 50: indicators.sma50 }} />
         </div>
       </div>
       <div>
@@ -548,18 +592,18 @@ function StockCard({ data, indicators, onRemove }) {
         <SMATag label="SMA 100" price={data.price} sma={data.sma100} color={C.sma100} visible={indicators.sma100} />
         <SMATag label="SMA 200" price={data.price} sma={data.sma200} color={C.sma200} visible={indicators.sma200} />
         <VolumeBar volume={data.volume} avgVol={data.avgVol20} visible={indicators.volume} />
-        <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 16, marginTop: 10 }}>
           <div>
-            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>RSI(14)</div>
-            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 12, color: data.rsi14 > 70 ? C.no : data.rsi14 < 30 ? C.yes : C.text }}>{data.rsi14?.toFixed(0)}</div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim }}>RSI(14)</div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowValue, color: data.rsi14 > 70 ? C.no : data.rsi14 < 30 ? C.yes : C.text }}>{data.rsi14?.toFixed(0)}</div>
           </div>
           <div>
-            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>1Y %ILE</div>
-            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 12, color: C.text }}>{data.percentile1y}th</div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim }}>1Y %ILE</div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowValue, color: C.text }}>{data.percentile1y}th</div>
           </div>
           <div>
-            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>5D SLOPE</div>
-            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 12, color: data.slope5d > 0 ? C.yes : C.no }}>{data.slope5d > 0 ? '+' : ''}{data.slope5d?.toFixed(2)}</div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim }}>5D SLOPE</div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowValue, color: data.slope5d > 0 ? C.yes : C.no }}>{data.slope5d > 0 ? '+' : ''}{data.slope5d?.toFixed(2)}</div>
           </div>
         </div>
       </div>
@@ -653,14 +697,14 @@ function DashboardScreen({ settings, isDesktop }) {
   return (
     <div style={{ padding: '0 0 80px' }}>
       {/* Status bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}` }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, padding: '2px 7px', border: `1px solid ${status === 'LIVE' ? C.yes : status === 'ERROR' ? C.no : C.caution}`, color: status === 'LIVE' ? C.yes : status === 'ERROR' ? C.no : C.caution, animation: status === 'UPDATING' ? 'pulse 0.8s infinite' : 'none' }}>{status}</span>
-          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>{secondsAgo < 5 ? 'just now' : `${secondsAgo}s ago`}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isDesktop ? '10px 32px' : '8px 14px', background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}`, transition: 'background 0.3s' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.statusFont, padding: '3px 9px', border: `1px solid ${status === 'LIVE' ? C.yes : status === 'ERROR' ? C.no : C.caution}`, color: status === 'LIVE' ? C.yes : status === 'ERROR' ? C.no : C.caution, animation: status === 'UPDATING' ? 'pulse 0.8s infinite' : 'none' }}>{status}</span>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.statusFont, color: C.dim }}>{secondsAgo < 5 ? 'just now' : `${secondsAgo}s ago`}</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, padding: '2px 8px', border: `1px solid ${regColor}30`, color: regColor }}>{regime}</span>
-          <button onClick={refresh} disabled={status === 'UPDATING'} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '3px 10px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: 9, borderRadius: 3 }}>⟳</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.statusFont, padding: '3px 10px', border: `1px solid ${regColor}30`, color: regColor }}>{regime}</span>
+          <button onClick={refresh} disabled={status === 'UPDATING'} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '4px 12px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: D.statusFont, borderRadius: 3 }}>⟳ REFRESH</button>
         </div>
       </div>
 
@@ -668,52 +712,52 @@ function DashboardScreen({ settings, isDesktop }) {
 
       {/* FOMC Alert */}
       {data?.fomcSoon && (
-        <div style={{ background: 'rgba(255,184,0,0.06)', border: `1px solid ${C.caution}`, borderRadius: 0, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 10, color: C.caution, animation: 'pulse 1.5s infinite' }}>⚠</span>
-          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.caution }}>FOMC EVENT WITHIN 72H — Reduce position size</span>
+        <div style={{ background: 'rgba(255,184,0,0.06)', border: `1px solid ${C.caution}`, borderRadius: 0, padding: isDesktop ? '10px 32px' : '7px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: D.rowLabel, color: C.caution, animation: 'pulse 1.5s infinite' }}>⚠</span>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.caution }}>FOMC EVENT WITHIN 72H — Reduce position size</span>
         </div>
       )}
 
       {error && (
         <div style={{ margin: '12px 14px', padding: '10px 12px', background: 'rgba(255,59,92,0.06)', border: `1px solid ${C.no}`, borderRadius: 4 }}>
-          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.no }}>{error}</span>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.no }}>{error}</span>
         </div>
       )}
 
-      <div style={{ padding: isDesktop ? '20px 24px' : '14px', maxWidth: isDesktop ? 1200 : undefined, margin: isDesktop ? '0 auto' : undefined }}>
+      <div style={{ padding: D.contentPad, maxWidth: D.contentMax, margin: D.contentMax ? '0 auto' : undefined }}>
         {/* HERO */}
-        <div style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 6, padding: '20px 16px', marginBottom: 12, textAlign: 'center' }}>
-          <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.14em', marginBottom: 14 }}>SHOULD I TRADE RIGHT NOW?</div>
-          <div style={{ display: 'flex', flexDirection: isDesktop ? 'row' : 'column', alignItems: 'center', justifyContent: 'center', gap: isDesktop ? 40 : 14 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-              {loading ? <Sk w={180} h={48} style={{ borderRadius: 4 }} /> : <Badge decision={dec} />}
-              {!loading && <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: dec === 'YES' ? C.yes : dec === 'CAUTION' ? C.caution : C.no, opacity: 0.8 }}>{subText}</div>}
+        <div style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 6, padding: isDesktop ? '32px 24px' : '20px 16px', marginBottom: 14, textAlign: 'center' }}>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.statusFont, color: C.dim, letterSpacing: '0.14em', marginBottom: 16 }}>SHOULD I TRADE RIGHT NOW?</div>
+          <div style={{ display: 'flex', flexDirection: D.heroDir, alignItems: 'center', justifyContent: 'center', gap: D.heroGap }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+              {loading ? <Sk w={200} h={52} style={{ borderRadius: 4 }} /> : <Badge decision={dec} />}
+              {!loading && <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: dec === 'YES' ? C.yes : dec === 'CAUTION' ? C.caution : C.no, opacity: 0.8 }}>{subText}</div>}
             </div>
-            {loading ? <Sk w={160} h={160} style={{ borderRadius: '50%' }} /> : <Gauge score={scores?.total || 0} decision={dec} size={isDesktop ? 180 : 156} />}
+            {loading ? <Sk w={D.gaugeSize} h={D.gaugeSize} style={{ borderRadius: '50%' }} /> : <Gauge score={scores?.total || 0} decision={dec} size={D.gaugeSize} />}
           </div>
         </div>
 
         {/* SCORE BREAKDOWN */}
         {!loading && scores && (
-          <Panel title="SCORE BREAKDOWN" pad="14px">
+          <Panel title="SCORE BREAKDOWN">
             <ScoreBar label="VOLATILITY" score={scores.volatility} weight="25%" color={scoreColor(scores.volatility)} />
             <ScoreBar label="MOMENTUM" score={scores.momentum} weight="25%" color={scoreColor(scores.momentum)} />
             <ScoreBar label="TREND" score={scores.trend} weight="20%" color={scoreColor(scores.trend)} />
             <ScoreBar label="BREADTH" score={scores.breadth} weight="20%" color={scoreColor(scores.breadth)} />
             <ScoreBar label="MACRO" score={scores.macro} weight="10%" color={scoreColor(scores.macro)} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTop: `1px solid ${C.dimmer}` }}>
-              <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>WEIGHTED TOTAL</span>
-              <span style={{ fontFamily: 'Share Tech Mono', fontSize: 12, color: scoreColor(scores.total), fontWeight: 700 }}>{scores.total}%</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.dimmer}` }}>
+              <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim }}>WEIGHTED TOTAL</span>
+              <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowValue, color: scoreColor(scores.total), fontWeight: 700 }}>{scores.total}%</span>
             </div>
           </Panel>
         )}
 
         {/* DATA PANELS GRID */}
-        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : '1fr 1fr', gap: 10, marginTop: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: D.gridCols, gap: D.gridGap, marginTop: 14 }}>
 
           {/* VOLATILITY */}
           <Panel title="VOLATILITY" score={scores?.volatility}>
-            {loading ? <><Sk h={12} /><Sk h={12} style={{marginTop:6}} /><Sk h={12} style={{marginTop:6}} /></> : (
+            {loading ? <><Sk h={14} /><Sk h={14} style={{marginTop:8}} /><Sk h={14} style={{marginTop:8}} /></> : (
               <>
                 <Row label="VIX" value={data?.vix?.price?.toFixed(2) || '--'} up={data?.vix?.price < 20} status={data?.vix?.price > 25 ? 'elevated' : data?.vix?.price < 15 ? 'low' : 'neutral'} />
                 <Row label="VIX 5D" value={data?.vix?.slope5d > 0 ? `+${data?.vix?.slope5d?.toFixed(2)}` : data?.vix?.slope5d?.toFixed(2)} up={data?.vix?.slope5d < 0} status={data?.vix?.slope5d > 1 ? 'risk-off' : data?.vix?.slope5d < -0.5 ? 'healthy' : 'neutral'} />
@@ -724,7 +768,7 @@ function DashboardScreen({ settings, isDesktop }) {
 
           {/* TREND */}
           <Panel title="TREND" score={scores?.trend}>
-            {loading ? <><Sk h={12} /><Sk h={12} style={{marginTop:6}} /><Sk h={12} style={{marginTop:6}} /></> : (
+            {loading ? <><Sk h={14} /><Sk h={14} style={{marginTop:8}} /><Sk h={14} style={{marginTop:8}} /></> : (
               <>
                 <Row label="vs MA200" value={spy?.price > spy?.sma200 ? 'ABOVE' : 'BELOW'} up={spy?.price > spy?.sma200} sub={spy?.sma200 ? spy.sma200.toFixed(0) : ''} status={spy?.price > spy?.sma200 ? 'healthy' : 'risk-off'} />
                 <Row label="vs MA50" value={spy?.price > spy?.sma50 ? 'ABOVE' : 'BELOW'} up={spy?.price > spy?.sma50} status={spy?.price > spy?.sma50 ? 'healthy' : 'weakening'} />
@@ -735,7 +779,7 @@ function DashboardScreen({ settings, isDesktop }) {
 
           {/* BREADTH */}
           <Panel title="BREADTH" score={scores?.breadth}>
-            {loading ? <><Sk h={12} /><Sk h={12} style={{marginTop:6}} /><Sk h={12} style={{marginTop:6}} /></> : (
+            {loading ? <><Sk h={14} /><Sk h={14} style={{marginTop:8}} /><Sk h={14} style={{marginTop:8}} /></> : (
               <>
                 <Row label="Sects >50d" value={`${(data?.sectors||[]).filter(s=>s.price>s.sma50).length}/11`} up={(data?.sectors||[]).filter(s=>s.price>s.sma50).length > 6} status={(data?.sectors||[]).filter(s=>s.price>s.sma50).length > 7 ? 'healthy' : 'weakening'} />
                 <Row label="Sects >200d" value={`${(data?.sectors||[]).filter(s=>s.price>s.sma200).length}/11`} up={(data?.sectors||[]).filter(s=>s.price>s.sma200).length > 6} status={(data?.sectors||[]).filter(s=>s.price>s.sma200).length > 7 ? 'healthy' : 'weakening'} />
@@ -746,7 +790,7 @@ function DashboardScreen({ settings, isDesktop }) {
 
           {/* MACRO */}
           <Panel title="MACRO" score={scores?.macro}>
-            {loading ? <><Sk h={12} /><Sk h={12} style={{marginTop:6}} /><Sk h={12} style={{marginTop:6}} /></> : (
+            {loading ? <><Sk h={14} /><Sk h={14} style={{marginTop:8}} /><Sk h={14} style={{marginTop:8}} /></> : (
               <>
                 <Row label="10Y Yield" value={data?.tnx?.price ? `${data.tnx.price.toFixed(2)}%` : '--'} up={data?.tnx?.price < 4.5} status={data?.tnx?.price > 4.8 ? 'risk-off' : data?.tnx?.price > 4.3 ? 'weakening' : 'neutral'} />
                 <Row label="DXY" value={data?.dxy?.price?.toFixed(2) || '--'} up={data?.dxy?.price < 104} status={data?.dxy?.price > 107 ? 'risk-off' : 'neutral'} />
@@ -756,43 +800,45 @@ function DashboardScreen({ settings, isDesktop }) {
           </Panel>
         </div>
 
-        {/* SECTOR HEATMAP */}
-        <div style={{ marginTop: 12 }}>
-          <Panel title="SECTOR HEATMAP — 11 ETFs">
-            {loading ? <Sk h={220} /> : <SectorBar sectors={data?.sectors} />}
-          </Panel>
-        </div>
-
-        {/* SPY SPARKLINE */}
-        {!loading && spy?.closes?.length > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <Panel title={`SPY PRICE CHART — ${spy.closes.length}D | MA20 MA50 MA200`}>
-              <Sparkline closes={spy.closes} width={Math.min(window.innerWidth - 62, isDesktop ? 1100 : 500)} height={isDesktop ? 120 : 80}
-                showSMA={{ 20: true, 50: true, 200: true }} />
-              <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
-                {[['MA20', C.sma20, spy.sma20], ['MA50', C.sma50, spy.sma50], ['MA100', C.sma100, spy.sma100], ['MA200', C.sma200, spy.sma200]].map(([l, c, v]) => (
-                  <span key={l} style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: c }}>● {l}: {v?.toFixed(2) || '--'}</span>
-                ))}
-              </div>
+        {/* SECTOR HEATMAP + SPY CHART — side-by-side on desktop */}
+        <div style={{ display: isDesktop ? 'grid' : 'block', gridTemplateColumns: isDesktop ? '1fr 1.6fr' : undefined, gap: D.gridGap, marginTop: 14 }}>
+          <div>
+            <Panel title="SECTOR HEATMAP — 11 ETFs">
+              {loading ? <Sk h={260} /> : <SectorBar sectors={data?.sectors} />}
             </Panel>
           </div>
-        )}
+
+          {/* SPY SPARKLINE */}
+          {!loading && spy?.closes?.length > 0 && (
+            <div>
+              <Panel title={`SPY PRICE CHART — ${spy.closes.length}D | MA20 MA50 MA200`}>
+                <Sparkline closes={spy.closes} width={Math.min(window.innerWidth - 80, D.chartMaxW)} height={D.chartH}
+                  showSMA={{ 20: true, 50: true, 200: true }} />
+                <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
+                  {[['MA20', C.sma20, spy.sma20], ['MA50', C.sma50, spy.sma50], ['MA100', C.sma100, spy.sma100], ['MA200', C.sma200, spy.sma200]].map(([l, c, v]) => (
+                    <span key={l} style={{ fontFamily: 'Share Tech Mono', fontSize: D.maLegend, color: c }}>● {l}: {v?.toFixed(2) || '--'}</span>
+                  ))}
+                </div>
+              </Panel>
+            </div>
+          )}
+        </div>
 
         {/* AI ANALYSIS */}
-        <div style={{ marginTop: 12, marginBottom: 12 }}>
+        <div style={{ marginTop: 14, marginBottom: 14 }}>
           <Panel title="TERMINAL ANALYSIS — AI LAYER">
             {loading || analysisLoading ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                <Sk h={11} /><Sk h={11} w="90%" /><Sk h={11} w="75%" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <Sk h={13} /><Sk h={13} w="90%" /><Sk h={13} w="75%" />
               </div>
             ) : (
-              <div className="fade-in" style={{ fontFamily: 'Share Tech Mono', fontSize: 11, color: C.textMid, lineHeight: 1.75 }}>{analysis}</div>
+              <div className="fade-in" style={{ fontFamily: 'Share Tech Mono', fontSize: D.aiFont, color: C.textMid, lineHeight: 1.85 }}>{analysis}</div>
             )}
           </Panel>
         </div>
 
-        <div style={{ textAlign: 'center', padding: '8px 0', borderTop: `1px solid ${C.dimmer}` }}>
-          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dimmer }}>DATA: YAHOO FINANCE · FRED · NOT FINANCIAL ADVICE</span>
+        <div style={{ textAlign: 'center', padding: '10px 0', borderTop: `1px solid ${C.dimmer}` }}>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.statusFont, color: C.dimmer }}>DATA: YAHOO FINANCE · FRED · NOT FINANCIAL ADVICE</span>
         </div>
       </div>
     </div>
@@ -866,30 +912,31 @@ function ScreenerScreen({ isDesktop }) {
   return (
     <div style={{ padding: '0 0 80px' }}>
       {/* Header */}
-      <div style={{ background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}`, padding: '10px 14px' }}>
-        <div style={{ maxWidth: isDesktop ? 1200 : undefined, margin: isDesktop ? '0 auto' : undefined }}>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+      <div style={{ background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}`, padding: isDesktop ? '14px 32px' : '10px 14px', transition: 'background 0.3s' }}>
+        <div style={{ maxWidth: D.contentMax, margin: D.contentMax ? '0 auto' : undefined }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
           <input
             value={input}
             onChange={e => setInput(e.target.value.toUpperCase())}
             onKeyDown={e => e.key === 'Enter' && addStock()}
             placeholder="ADD TICKER (e.g. AAPL)"
             style={{
-              flex: 1, background: C.bgPanel, border: `1px solid ${C.dimmer}`, color: C.text, padding: '9px 12px',
-              fontFamily: 'Share Tech Mono', fontSize: 13, borderRadius: 4,
+              flex: 1, background: C.bgPanel, border: `1px solid ${C.dimmer}`, color: C.text,
+              padding: isDesktop ? '12px 16px' : '9px 12px',
+              fontFamily: 'Share Tech Mono', fontSize: isDesktop ? 14 : 13, borderRadius: 4,
             }}
           />
-          <button onClick={addStock} style={{ background: C.blue, border: 'none', color: '#000', padding: '9px 16px', fontFamily: 'Share Tech Mono', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 4 }}>+ ADD</button>
-          <button onClick={refreshAll} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '9px 12px', fontFamily: 'Share Tech Mono', fontSize: 11, cursor: 'pointer', borderRadius: 4 }}>⟳</button>
+          <button onClick={addStock} style={{ background: C.blue, border: 'none', color: '#000', padding: isDesktop ? '12px 24px' : '9px 16px', fontFamily: 'Share Tech Mono', fontSize: isDesktop ? 13 : 12, fontWeight: 700, cursor: 'pointer', borderRadius: 4 }}>+ ADD</button>
+          <button onClick={refreshAll} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: isDesktop ? '12px 16px' : '9px 12px', fontFamily: 'Share Tech Mono', fontSize: isDesktop ? 12 : 11, cursor: 'pointer', borderRadius: 4 }}>⟳ REFRESH</button>
         </div>
-        {error && <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.no, marginBottom: 8 }}>{error}</div>}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {error && <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.no, marginBottom: 8 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {indicatorBtns.map(({ key, label, color }) => (
             <button key={key} onClick={() => toggleIndicator(key)} style={{
               background: indicators[key] ? `${color}18` : 'transparent',
               border: `1px solid ${indicators[key] ? color : C.dimmer}`,
               color: indicators[key] ? color : C.dim,
-              padding: '4px 10px', fontFamily: 'Share Tech Mono', fontSize: 10, cursor: 'pointer', borderRadius: 3,
+              padding: isDesktop ? '6px 14px' : '4px 10px', fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, cursor: 'pointer', borderRadius: 3,
               boxShadow: indicators[key] ? `0 0 6px ${color}40` : 'none',
             }}>{indicators[key] ? '●' : '○'} {label}</button>
           ))}
@@ -897,35 +944,35 @@ function ScreenerScreen({ isDesktop }) {
         </div>
       </div>
 
-      <div style={{ padding: isDesktop ? '16px 24px' : '12px 14px', maxWidth: isDesktop ? 1200 : undefined, margin: isDesktop ? '0 auto' : undefined }}>
+      <div style={{ padding: D.contentPad, maxWidth: D.contentMax, margin: D.contentMax ? '0 auto' : undefined }}>
         {stocks.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: C.dim, fontFamily: 'Share Tech Mono', fontSize: 12 }}>
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: C.dim, fontFamily: 'Share Tech Mono', fontSize: D.rowValue }}>
             No stocks in screener. Add a ticker above.
           </div>
         )}
-        <div style={isDesktop ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } : {}}>
+        <div style={isDesktop ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: D.gridGap } : {}}>
         {stocks.map(sym => {
           const d = data[sym];
           if (loadingMap[sym] || !d) return (
             <div key={sym} style={{ marginBottom: 10 }}>
-              <div style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 6, padding: '14px' }}>
+              <div style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 6, padding: D.cardPad }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <span style={{ fontFamily: 'Share Tech Mono', fontSize: 16, color: C.text }}>{sym}</span>
-                  <div style={{ width: 16, height: 16, border: `2px solid ${C.blue}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                  <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.cardSymbol, color: C.text }}>{sym}</span>
+                  <div style={{ width: 18, height: 18, border: `2px solid ${C.blue}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                 </div>
-                <Sk h={12} /><Sk h={12} style={{ marginTop: 8 }} /><Sk h={12} style={{ marginTop: 8 }} />
+                <Sk h={14} /><Sk h={14} style={{ marginTop: 8 }} /><Sk h={14} style={{ marginTop: 8 }} />
               </div>
             </div>
           );
           if (d.error) return (
-            <div key={sym} style={{ marginBottom: 10, background: C.bgPanel, border: `1px solid ${C.no}20`, borderRadius: 6, padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div key={sym} style={{ marginBottom: 10, background: C.bgPanel, border: `1px solid ${C.no}20`, borderRadius: 6, padding: D.cardPad, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <span style={{ fontFamily: 'Share Tech Mono', fontSize: 14, color: C.no }}>{sym}</span>
-                <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, marginTop: 4 }}>Failed to load data</div>
+                <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.cardSymbol, color: C.no }}>{sym}</span>
+                <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.dim, marginTop: 4 }}>Failed to load data</div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => fetchStock(sym)} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '4px 10px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: 9, borderRadius: 3 }}>↻ RETRY</button>
-                <button onClick={() => removeStock(sym)} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '4px 10px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: 9, borderRadius: 3 }}>✕</button>
+                <button onClick={() => fetchStock(sym)} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '5px 12px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, borderRadius: 3 }}>RETRY</button>
+                <button onClick={() => removeStock(sym)} style={{ background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '5px 12px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, borderRadius: 3 }}>✕</button>
               </div>
             </div>
           );
@@ -944,6 +991,7 @@ function ScreenerScreen({ isDesktop }) {
 function SettingsScreen({ settings, onSave, themeName, onThemeChange, layout, onLayoutChange }) {
   const [form, setForm] = useState(settings);
   const [saved, setSaved] = useState(false);
+  const isDesktop = layout === 'desktop';
 
   const save = () => {
     onSave(form);
@@ -953,75 +1001,75 @@ function SettingsScreen({ settings, onSave, themeName, onThemeChange, layout, on
 
   const Field = ({ label, k, placeholder, type = 'text', note }) => (
     <div style={{ marginBottom: 16 }}>
-      <label style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, display: 'block', marginBottom: 5, letterSpacing: '0.1em' }}>{label}</label>
+      <label style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.dim, display: 'block', marginBottom: 5, letterSpacing: '0.1em' }}>{label}</label>
       <input
         type={type} value={form[k] || ''} onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))}
         placeholder={placeholder}
-        style={{ width: '100%', background: C.bgPanel, border: `1px solid ${C.dimmer}`, color: C.text, padding: '10px 12px', fontFamily: 'Share Tech Mono', fontSize: 12, borderRadius: 4 }}
+        style={{ width: '100%', background: C.bgPanel, border: `1px solid ${C.dimmer}`, color: C.text, padding: isDesktop ? '12px 14px' : '10px 12px', fontFamily: 'Share Tech Mono', fontSize: D.rowValue, borderRadius: 4 }}
       />
-      {note && <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginTop: 4 }}>{note}</div>}
+      {note && <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim, marginTop: 4 }}>{note}</div>}
     </div>
   );
 
   return (
-    <div style={{ padding: '16px 14px 80px' }}>
-      <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, letterSpacing: '0.12em', marginBottom: 20, paddingBottom: 10, borderBottom: `1px solid ${C.dimmer}` }}>CONFIGURATION</div>
+    <div style={{ padding: D.contentPad, paddingBottom: 80, maxWidth: isDesktop ? 800 : undefined, margin: isDesktop ? '0 auto' : undefined }}>
+      <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.panelTitle, color: C.dim, letterSpacing: '0.12em', marginBottom: 20, paddingBottom: 10, borderBottom: `1px solid ${C.dimmer}` }}>CONFIGURATION</div>
 
-      <Panel title="DISPLAY" pad="14px">
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, display: 'block', marginBottom: 8, letterSpacing: '0.1em' }}>THEME</label>
-          <div style={{ display: 'flex', gap: 8 }}>
+      <Panel title="DISPLAY">
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.dim, display: 'block', marginBottom: 8, letterSpacing: '0.1em' }}>THEME</label>
+          <div style={{ display: 'flex', gap: 10 }}>
             {['dark', 'light'].map(t => (
               <button key={t} onClick={() => onThemeChange(t)} style={{
-                flex: 1, padding: '10px', background: themeName === t ? C.dimmer : 'transparent',
+                flex: 1, padding: isDesktop ? '12px' : '10px', background: themeName === t ? C.dimmer : 'transparent',
                 border: `1px solid ${themeName === t ? C.blue : C.dimmer}`,
                 color: themeName === t ? C.blue : C.dim, cursor: 'pointer',
-                fontFamily: 'Share Tech Mono', fontSize: 11, borderRadius: 4,
+                fontFamily: 'Share Tech Mono', fontSize: D.rowValue, borderRadius: 4,
               }}>{t === 'dark' ? '☽ DARK' : '☀ LIGHT'}</button>
             ))}
           </div>
         </div>
         <div>
-          <label style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, display: 'block', marginBottom: 8, letterSpacing: '0.1em' }}>LAYOUT</label>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <label style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.dim, display: 'block', marginBottom: 8, letterSpacing: '0.1em' }}>LAYOUT</label>
+          <div style={{ display: 'flex', gap: 10 }}>
             {['mobile', 'desktop'].map(l => (
               <button key={l} onClick={() => onLayoutChange(l)} style={{
-                flex: 1, padding: '10px', background: layout === l ? C.dimmer : 'transparent',
+                flex: 1, padding: isDesktop ? '12px' : '10px', background: layout === l ? C.dimmer : 'transparent',
                 border: `1px solid ${layout === l ? C.blue : C.dimmer}`,
                 color: layout === l ? C.blue : C.dim, cursor: 'pointer',
-                fontFamily: 'Share Tech Mono', fontSize: 11, borderRadius: 4,
+                fontFamily: 'Share Tech Mono', fontSize: D.rowValue, borderRadius: 4,
               }}>{l === 'mobile' ? '◧ MOBILE' : '⊞ DESKTOP'}</button>
             ))}
           </div>
-          <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginTop: 8 }}>Desktop uses wider layout with 4-column grid and side-by-side panels</div>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim, marginTop: 8 }}>Desktop uses wider layout with 4-column grid and side-by-side panels</div>
         </div>
       </Panel>
 
       <div style={{ marginTop: 16 }}>
-      <Panel title="TRADING MODE" pad="14px">
-        <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+      <Panel title="TRADING MODE">
+        <div style={{ display: 'flex', gap: 10, marginBottom: 4 }}>
           {['SWING', 'DAY'].map(m => (
             <button key={m} onClick={() => setForm(p => ({ ...p, mode: m }))} style={{
-              flex: 1, padding: '10px', background: form.mode === m ? C.dimmer : 'transparent',
+              flex: 1, padding: isDesktop ? '12px' : '10px', background: form.mode === m ? C.dimmer : 'transparent',
               border: `1px solid ${form.mode === m ? C.blue : C.dimmer}`,
               color: form.mode === m ? C.blue : C.dim, cursor: 'pointer',
-              fontFamily: 'Share Tech Mono', fontSize: 11, borderRadius: 4,
+              fontFamily: 'Share Tech Mono', fontSize: D.rowValue, borderRadius: 4,
             }}>{m}</button>
           ))}
         </div>
-        <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginTop: 8 }}>Affects scoring thresholds and AI analysis tone</div>
+        <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim, marginTop: 8 }}>Affects scoring thresholds and AI analysis tone</div>
       </Panel>
       </div>
 
       <div style={{ marginTop: 16 }}>
-        <Panel title="API KEYS" pad="14px">
-          <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.textMid, lineHeight: 1.8 }}>
+        <Panel title="API KEYS">
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.textMid, lineHeight: 1.8 }}>
             <div style={{ color: C.yes, marginBottom: 6 }}>Keys are set server-side (secure)</div>
             <div>● <span style={{ color: C.dim }}>ANTHROPIC_API_KEY</span> — AI terminal analysis</div>
             <div>● <span style={{ color: C.dim }}>FRED_API_KEY</span> — Fed Funds macro data</div>
           </div>
-          <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(0,136,204,0.06)', border: `1px solid ${C.blue}30`, borderRadius: 4 }}>
-            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, lineHeight: 1.7 }}>
+          <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(0,136,204,0.06)', border: `1px solid ${C.blue}30`, borderRadius: 4 }}>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim, lineHeight: 1.7 }}>
               Local: set in .env file · Netlify: set in Site settings → Environment variables
             </div>
           </div>
@@ -1029,16 +1077,16 @@ function SettingsScreen({ settings, onSave, themeName, onThemeChange, layout, on
       </div>
 
       <div style={{ marginTop: 16 }}>
-        <Panel title="REFRESH" pad="14px">
+        <Panel title="REFRESH">
           <div style={{ marginBottom: 4 }}>
-            <label style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, display: 'block', marginBottom: 8 }}>AUTO-REFRESH INTERVAL</label>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <label style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.dim, display: 'block', marginBottom: 8 }}>AUTO-REFRESH INTERVAL</label>
+            <div style={{ display: 'flex', gap: 10 }}>
               {[30, 45, 60, 120].map(s => (
                 <button key={s} onClick={() => setForm(p => ({ ...p, refreshInterval: s * 1000 }))} style={{
-                  flex: 1, padding: '8px 4px', background: form.refreshInterval === s * 1000 ? C.dimmer : 'transparent',
+                  flex: 1, padding: isDesktop ? '10px 6px' : '8px 4px', background: form.refreshInterval === s * 1000 ? C.dimmer : 'transparent',
                   border: `1px solid ${form.refreshInterval === s * 1000 ? C.blue : C.dimmer}`,
                   color: form.refreshInterval === s * 1000 ? C.blue : C.dim, cursor: 'pointer',
-                  fontFamily: 'Share Tech Mono', fontSize: 10, borderRadius: 4,
+                  fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, borderRadius: 4,
                 }}>{s}s</button>
               ))}
             </div>
@@ -1047,15 +1095,15 @@ function SettingsScreen({ settings, onSave, themeName, onThemeChange, layout, on
       </div>
 
       <div style={{ marginTop: 16 }}>
-        <Panel title="DATA SOURCES" pad="14px">
-          <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.textMid, lineHeight: 1.8 }}>
+        <Panel title="DATA SOURCES">
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.textMid, lineHeight: 1.8 }}>
             <div>● <span style={{ color: C.yes }}>Yahoo Finance</span> — Prices, OHLCV, SMAs (via CORS proxy)</div>
             <div>● <span style={{ color: C.yes }}>FRED API</span> — Fed Funds rate (optional key)</div>
             <div>● <span style={{ color: C.caution }}>Breadth data</span> — Approximated from sector ETFs</div>
             <div>● <span style={{ color: C.caution }}>Put/Call ratio</span> — Derived from VIX regime</div>
           </div>
-          <div style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(0,136,204,0.06)', border: `1px solid ${C.blue}30`, borderRadius: 4 }}>
-            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, lineHeight: 1.7 }}>
+          <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(0,136,204,0.06)', border: `1px solid ${C.blue}30`, borderRadius: 4 }}>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim, lineHeight: 1.7 }}>
               For true breadth data (% above 200d MA), consider upgrading to Polygon.io or Nasdaq Data Link. For institutional accuracy, FactSet or Bloomberg Terminal APIs provide tick-level breadth.
             </div>
           </div>
@@ -1063,22 +1111,22 @@ function SettingsScreen({ settings, onSave, themeName, onThemeChange, layout, on
       </div>
 
       <div style={{ marginTop: 16 }}>
-        <Panel title="INSTALL AS APP" pad="14px">
-          <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.textMid, lineHeight: 1.9 }}>
+        <Panel title="INSTALL AS APP">
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.textMid, lineHeight: 1.9 }}>
             <div style={{ color: C.yes, marginBottom: 6 }}>Samsung S24 Ultra — Chrome:</div>
-            <div>1. Open Chrome → tap ⋮ menu</div>
+            <div>1. Open Chrome, tap menu</div>
             <div>2. Tap "Add to Home screen"</div>
-            <div>3. Tap "Add" → app appears on home</div>
+            <div>3. Tap "Add" — app appears on home</div>
             <div style={{ color: C.yes, marginTop: 10, marginBottom: 6 }}>Samsung Internet:</div>
-            <div>1. Tap ≡ menu → "Add page to"</div>
+            <div>1. Tap menu — "Add page to"</div>
             <div>2. Select "Home screen"</div>
           </div>
         </Panel>
       </div>
 
       <button onClick={save} style={{
-        width: '100%', marginTop: 20, padding: '14px', background: saved ? C.yes : C.blue,
-        border: 'none', color: '#000', fontFamily: 'Share Tech Mono', fontSize: 14, fontWeight: 700,
+        width: '100%', marginTop: 20, padding: isDesktop ? '16px' : '14px', background: saved ? C.yes : C.blue,
+        border: 'none', color: '#000', fontFamily: 'Share Tech Mono', fontSize: D.cardSymbol, fontWeight: 700,
         cursor: 'pointer', borderRadius: 6, transition: 'background 0.3s',
         boxShadow: `0 0 20px ${saved ? C.yes : C.blue}40`,
       }}>{saved ? '✓ SAVED' : 'SAVE SETTINGS'}</button>
@@ -1105,6 +1153,7 @@ function App() {
   });
 
   C = THEMES[themeName];
+  D = DIMS[layout];
   const isDesktop = layout === 'desktop';
 
   useEffect(() => {
@@ -1132,24 +1181,24 @@ function App() {
     { id: 'settings', label: 'SETTINGS', icon: '⚙' },
   ];
 
-  const hdrBtn = { background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: '3px 8px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: 10, borderRadius: 3, transition: 'all 0.2s' };
+  const hdrBtnStyle = { background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim, padding: isDesktop ? '5px 12px' : '3px 8px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: isDesktop ? 12 : 10, borderRadius: 3, transition: 'all 0.2s' };
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, fontFamily: 'Share Tech Mono', transition: 'background 0.3s' }}>
       {/* Header */}
-      <div style={{ background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}`, padding: '10px 16px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.3s, border-color 0.3s' }}>
+      <div style={{ background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}`, padding: D.hdrPad, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.3s, border-color 0.3s' }}>
         <div>
-          <div style={{ fontSize: 13, color: C.text, fontWeight: 700, letterSpacing: '0.1em' }}>◈ SHOULD I BE TRADING?</div>
-          <div style={{ fontSize: 9, color: C.dim, marginTop: 1 }}>{settings.mode} MODE · BLOOMBERG TERMINAL</div>
+          <div style={{ fontSize: D.hdrTitle, color: C.text, fontWeight: 700, letterSpacing: '0.1em' }}>◈ SHOULD I BE TRADING?</div>
+          <div style={{ fontSize: D.hdrSub, color: C.dim, marginTop: 2 }}>{settings.mode} MODE · BLOOMBERG TERMINAL</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button onClick={toggleTheme} style={hdrBtn} title={themeName === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-            {themeName === 'dark' ? '☀' : '☽'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: isDesktop ? 10 : 6 }}>
+          <button onClick={toggleTheme} style={hdrBtnStyle} title={themeName === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            {themeName === 'dark' ? '☀' : '☽'}{isDesktop ? (themeName === 'dark' ? ' LIGHT' : ' DARK') : ''}
           </button>
-          <button onClick={toggleLayout} style={hdrBtn} title={isDesktop ? 'Switch to mobile layout' : 'Switch to desktop layout'}>
-            {isDesktop ? '◧' : '⊞'}
+          <button onClick={toggleLayout} style={hdrBtnStyle} title={isDesktop ? 'Switch to mobile layout' : 'Switch to desktop layout'}>
+            {isDesktop ? '◧ MOBILE' : '⊞ DESKTOP'}
           </button>
-          <div style={{ fontSize: 9, color: C.dim, textAlign: 'right', marginLeft: 4 }}>
+          <div style={{ fontSize: D.hdrSub, color: C.dim, textAlign: 'right', marginLeft: 6 }}>
             <div style={{ color: C.yes }}>● LIVE</div>
             <div style={{ marginTop: 1 }}>YAHOO · FRED</div>
           </div>
@@ -1175,17 +1224,24 @@ function App() {
       <div style={{
         background: C.bgPanel, borderTop: `1px solid ${C.dimmer}`,
         display: 'flex', flexShrink: 0,
+        justifyContent: isDesktop ? 'center' : 'stretch',
+        gap: isDesktop ? 4 : 0,
         paddingBottom: safeBottom,
         transition: 'background 0.3s, border-color 0.3s',
       }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            padding: '10px 0', background: 'none', border: 'none', cursor: 'pointer',
+            flex: isDesktop ? undefined : 1,
+            width: isDesktop ? 180 : undefined,
+            display: 'flex',
+            flexDirection: isDesktop ? 'row' : 'column',
+            alignItems: 'center', justifyContent: 'center',
+            gap: isDesktop ? 8 : 0,
+            padding: D.navPad, background: 'none', border: 'none', cursor: 'pointer',
             borderTop: tab === t.id ? `2px solid ${C.blue}` : '2px solid transparent',
           }}>
-            <span style={{ fontSize: 16, color: tab === t.id ? C.blue : C.dim, marginBottom: 2 }}>{t.icon}</span>
-            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: tab === t.id ? C.blue : C.dim, letterSpacing: '0.08em' }}>{t.label}</span>
+            <span style={{ fontSize: D.navIcon, color: tab === t.id ? C.blue : C.dim, marginBottom: isDesktop ? 0 : 2 }}>{t.icon}</span>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.navLabel, color: tab === t.id ? C.blue : C.dim, letterSpacing: '0.08em' }}>{t.label}</span>
           </button>
         ))}
       </div>
