@@ -37,7 +37,7 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel">
+<script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
 // ════════════════════════════════════════════════════════════
@@ -1043,7 +1043,7 @@ function SettingsScreen({ settings, onSave }) {
 
 const DEFAULT_SETTINGS = { mode: 'SWING', anthropicKey: '', fredKey: '', refreshInterval: 45000 };
 
-export default function App() {
+function App() {
   const [tab, setTab] = useState('dashboard');
   const [settings, setSettings] = useState(() => {
     try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('app_settings') || '{}') }; } catch { return DEFAULT_SETTINGS; }
