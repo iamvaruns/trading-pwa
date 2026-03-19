@@ -164,6 +164,58 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── API: Yahoo Quote Summary proxy ─────────────────────────────────────────
+  if (pathname === '/api/yahoo-quote') {
+    const symbol = parsed.query.symbol;
+    if (!symbol) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing symbol' }));
+      return;
+    }
+    console.log(`  📋 Yahoo Quote: ${symbol}`);
+    try {
+      const encoded = encodeURIComponent(symbol);
+      let crumb = '', cookies = '';
+      try {
+        const auth = await getYahooCrumb();
+        crumb = auth.crumb;
+        cookies = auth.cookies;
+      } catch { /* proceed without crumb */ }
+      const crumbParam = crumb ? `&crumb=${encodeURIComponent(crumb)}` : '';
+      const modules = 'financialData,defaultKeyStatistics,calendarEvents,price';
+      const qUrl = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encoded}?modules=${modules}${crumbParam}`;
+      const qRes = await httpsGet(qUrl, { Cookie: cookies, Accept: 'application/json', Referer: 'https://finance.yahoo.com/', Origin: 'https://finance.yahoo.com' });
+      const json = JSON.parse(qRes.body);
+      const r = json.quoteSummary?.result?.[0];
+      if (!r) throw new Error(`No quote summary for ${symbol}`);
+      const fd = r.financialData || {};
+      const ks = r.defaultKeyStatistics || {};
+      const ce = r.calendarEvents || {};
+      const pr = r.price || {};
+      const earningsDates = (ce.earnings?.earningsDate || []).map(d => d.raw).filter(Boolean);
+      const result = {
+        trailingPE: ks.trailingPE?.raw || null,
+        forwardPE: ks.forwardPE?.raw || null,
+        profitMargins: fd.profitMargins?.raw || null,
+        revenueGrowth: fd.revenueGrowth?.raw || null,
+        earningsGrowth: fd.earningsGrowth?.raw || null,
+        marketCap: pr.marketCap?.raw || null,
+        fiftyTwoWeekHigh: ks.fiftyTwoWeekHigh?.raw || pr.fiftyTwoWeekHigh?.raw || null,
+        fiftyTwoWeekLow: ks.fiftyTwoWeekLow?.raw || pr.fiftyTwoWeekLow?.raw || null,
+        earningsDate: earningsDates.length > 0 ? earningsDates[0] : null,
+        targetMeanPrice: fd.targetMeanPrice?.raw || null,
+        recommendationMean: fd.recommendationMean?.raw || null,
+      };
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60' });
+      res.end(JSON.stringify(result));
+    } catch (e) {
+      console.error(`  ✗ Yahoo Quote error for ${symbol}:`, e.message);
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message, symbol }));
+    }
+    return;
+  }
+
   // ── API: FRED proxy ────────────────────────────────────────────────────────
   if (pathname === '/api/fred') {
     const seriesId = parsed.query.series;

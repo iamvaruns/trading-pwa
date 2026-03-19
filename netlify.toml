@@ -1,6 +1,7 @@
 [build]
+  command = "npm run build"
   functions = "netlify/functions"
-  publish = "."
+  publish = "dist"
 
 [[redirects]]
   from = "/api/yahoo"
@@ -15,4 +16,9 @@
 [[redirects]]
   from = "/api/analysis"
   to = "/.netlify/functions/analysis"
+  status = 200
+
+[[redirects]]
+  from = "/api/yahoo-quote"
+  to = "/.netlify/functions/yahoo-quote"
   status = 200
