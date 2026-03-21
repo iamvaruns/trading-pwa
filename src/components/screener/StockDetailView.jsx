@@ -318,6 +318,7 @@ export function StockDetailView({
   const rsiRef = useRef(null);
   const macdRef = useRef(null);
   const wrapperRef = useRef(null);
+  const chartPanelRef = useRef(null);
   const chartsRef = useRef([]);
   const syncingRef = useRef(false);
   const candleSeriesRef = useRef(null);
@@ -351,12 +352,15 @@ export function StockDetailView({
     macdRef.current.innerHTML = '';
 
     const isIntraday = timeframe === '1H' || timeframe === '1D';
+    const panelPad = isDesktop ? 28 : 20;
+    const chartW = (chartPanelRef.current?.clientWidth || wrapperRef.current?.clientWidth || 600) - panelPad;
     const mkOpts = (h) => ({
-      width: wrapperRef.current?.clientWidth || 600,
+      width: chartW,
       height: h,
       layout: { background: { type: 'solid', color: C.bg }, textColor: C.dim, fontFamily: 'Share Tech Mono', fontSize: 10 },
       grid: { vertLines: { color: C.dimmer }, horzLines: { color: C.dimmer } },
       crosshair: { mode: CrosshairMode.Normal },
+      handleScroll: { vertTouchDrag: false },
       rightPriceScale: { borderColor: C.dimmer },
       timeScale: { borderColor: C.dimmer, timeVisible: isIntraday, secondsVisible: false },
     });
@@ -447,10 +451,11 @@ export function StockDetailView({
     allCharts.forEach(c => c.timeScale().fitContent());
 
     const ro = new ResizeObserver(() => {
-      const w = wrapperRef.current?.clientWidth;
-      if (w) allCharts.forEach(c => { try { c.applyOptions({ width: w }); } catch { /* ignore */ } });
+      const pad = isDesktop ? 28 : 20;
+      const w = chartPanelRef.current?.clientWidth;
+      if (w) allCharts.forEach(c => { try { c.applyOptions({ width: w - pad }); } catch { /* ignore */ } });
     });
-    if (wrapperRef.current) ro.observe(wrapperRef.current);
+    if (chartPanelRef.current) ro.observe(chartPanelRef.current);
 
     return () => {
       ro.disconnect();
@@ -539,19 +544,20 @@ export function StockDetailView({
           <div style={{ textAlign: 'center', padding: 40, color: C.no, fontFamily: 'Share Tech Mono' }}>{error}</div>
         ) : (
           <div ref={wrapperRef}>
-            <div style={{ marginBottom: 2 }}>
-              <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 4 }}>PRICE</div>
+            <div ref={chartPanelRef} style={{
+              background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 6,
+              padding: isDesktop ? '14px' : '10px', overflow: 'hidden',
+              touchAction: 'pan-y',
+            }}>
+              <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 6 }}>PRICE</div>
               <div ref={mainRef} />
-            </div>
-            <div style={{ marginBottom: 2 }}>
+              <div style={{ borderTop: `1px solid ${C.dimmer}`, margin: '6px 0' }} />
               <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 4 }}>VOLUME</div>
               <div ref={volRef} />
-            </div>
-            <div style={{ marginBottom: 2 }}>
+              <div style={{ borderTop: `1px solid ${C.dimmer}`, margin: '6px 0' }} />
               <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 4 }}>RSI (14)</div>
               <div ref={rsiRef} />
-            </div>
-            <div style={{ marginBottom: 2 }}>
+              <div style={{ borderTop: `1px solid ${C.dimmer}`, margin: '6px 0' }} />
               <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 4 }}>MACD (12, 26, 9)</div>
               <div ref={macdRef} />
             </div>
