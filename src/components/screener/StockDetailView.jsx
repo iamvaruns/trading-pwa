@@ -346,6 +346,7 @@ export function StockDetailView({
     chartsRef.current.forEach(c => { try { c.remove(); } catch { /* already removed */ } });
     chartsRef.current = [];
     candleSeriesRef.current = null;
+    let moCleanup = null;
     mainRef.current.innerHTML = '';
     volRef.current.innerHTML = '';
     rsiRef.current.innerHTML = '';
@@ -354,13 +355,19 @@ export function StockDetailView({
     const isIntraday = timeframe === '1H' || timeframe === '1D';
     const panelPad = isDesktop ? 28 : 20;
     const chartW = (chartPanelRef.current?.clientWidth || wrapperRef.current?.clientWidth || 600) - panelPad;
+    const touchOpts = isDesktop
+      ? { handleScroll: { vertTouchDrag: false }, handleScale: {} }
+      : {
+          handleScroll: { vertTouchDrag: false, horzTouchDrag: false },
+          handleScale: { pinch: false },
+        };
     const mkOpts = (h) => ({
       width: chartW,
       height: h,
       layout: { background: { type: 'solid', color: C.bg }, textColor: C.dim, fontFamily: 'Share Tech Mono', fontSize: 10 },
       grid: { vertLines: { color: C.dimmer }, horzLines: { color: C.dimmer } },
       crosshair: { mode: CrosshairMode.Normal },
-      handleScroll: { vertTouchDrag: false },
+      ...touchOpts,
       rightPriceScale: { borderColor: C.dimmer },
       timeScale: { borderColor: C.dimmer, timeVisible: isIntraday, secondsVisible: false },
     });
@@ -450,6 +457,17 @@ export function StockDetailView({
 
     allCharts.forEach(c => c.timeScale().fitContent());
 
+    if (!isDesktop && chartPanelRef.current) {
+      const forceTouch = () => {
+        chartPanelRef.current?.querySelectorAll('canvas, table, td, .tv-lightweight-charts')
+          .forEach(el => { el.style.touchAction = 'pan-y'; });
+      };
+      forceTouch();
+      const mo = new MutationObserver(forceTouch);
+      mo.observe(chartPanelRef.current, { childList: true, subtree: true });
+      moCleanup = () => mo.disconnect();
+    }
+
     const ro = new ResizeObserver(() => {
       const pad = isDesktop ? 28 : 20;
       const w = chartPanelRef.current?.clientWidth;
@@ -459,6 +477,7 @@ export function StockDetailView({
 
     return () => {
       ro.disconnect();
+      if (moCleanup) moCleanup();
       allCharts.forEach(c => { try { c.remove(); } catch { /* ignore */ } });
       chartsRef.current = [];
       candleSeriesRef.current = null;
