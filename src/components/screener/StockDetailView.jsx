@@ -3,16 +3,63 @@ import { createChart, CrosshairMode, LineStyle } from 'lightweight-charts';
 import { useTheme, scoreColor } from '../../context/ThemeContext';
 import { CHART_TIMEFRAMES } from '../../constants';
 import { loadStockDataForChart } from '../../utils/data';
-import { calcSMASeries, calcRSISeries, calcMACDSeries } from '../../utils/calculations';
+import { calcSMASeries, calcRSISeries, calcMACDSeries, detectSellSignals } from '../../utils/calculations';
 import { Sk } from '../ui/Skeleton';
 
 const HORIZON_LABELS = { SHORT: 'SHORT (1-2mo)', MEDIUM: 'MEDIUM (3-6mo)', LONG: 'LONG (1yr)' };
 
+function SellSignalPanel({ data, score, C, D }) {
+  if (!data || !data.price) return null;
+  const { verdict, triggers } = detectSellSignals(data, score);
+  if (triggers.length === 0) return null;
+
+  const verdictColor = verdict === 'SELL NOW' ? C.no : verdict === 'CONSIDER SELLING' ? C.caution : C.yes;
+
+  return (
+    <div style={{ marginTop: 12, padding: D.panelBodyPad, background: C.bgPanel, border: `1px solid ${verdictColor}40`, borderRadius: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.panelTitle, color: C.dim, letterSpacing: '0.1em' }}>SELL GUIDANCE</div>
+        <span style={{
+          fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, fontWeight: 700,
+          padding: '3px 12px', borderRadius: 3,
+          background: `${verdictColor}18`, border: `1px solid ${verdictColor}60`, color: verdictColor,
+        }}>{verdict}</span>
+      </div>
+      {triggers.map((t, i) => {
+        const sevColor = t.severity === 'high' ? C.no : C.caution;
+        return (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10, padding: '6px 0',
+            borderLeft: `3px solid ${sevColor}`, paddingLeft: 10, marginBottom: 4,
+          }}>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: sevColor, fontWeight: 700, minWidth: 48 }}>
+              {t.severity === 'high' ? 'HIGH' : 'WARN'}
+            </span>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.text, flex: 1 }}>
+              {t.label}
+            </span>
+          </div>
+        );
+      })}
+      {data.atr14 && data.price && (
+        <div style={{
+          marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.dimmer}`,
+          fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.dim,
+        }}>
+          Suggested stop-loss: <span style={{ color: C.no, fontWeight: 700 }}>
+            ${(data.price - 2 * data.atr14).toFixed(2)}
+          </span> (price - 2x ATR)
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SignalsPanel({ signals, C, D }) {
   if (!signals || signals.length === 0) return null;
   return (
-    <div style={{ marginTop: 12, padding: '10px 14px', background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4 }}>
-      <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 8 }}>SIGNALS</div>
+    <div style={{ marginTop: 12, padding: D.panelBodyPad, background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4 }}>
+      <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.panelTitle, color: C.dim, letterSpacing: '0.1em', marginBottom: 8 }}>SIGNALS</div>
       {signals.map((sig, i) => {
         const borderCol = sig.direction === 'bullish' ? C.yes : sig.direction === 'bearish' ? C.no : C.caution;
         const dirLabel = sig.direction === 'bullish' ? 'BULLISH' : sig.direction === 'bearish' ? 'BEARISH' : 'CAUTION';
@@ -21,10 +68,10 @@ function SignalsPanel({ signals, C, D }) {
             display: 'flex', alignItems: 'flex-start', gap: 10, padding: '6px 0',
             borderLeft: `3px solid ${borderCol}`, paddingLeft: 10, marginBottom: 4,
           }}>
-            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: borderCol, fontWeight: 700, minWidth: 60 }}>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: borderCol, fontWeight: 700, minWidth: 60 }}>
               {dirLabel}
             </span>
-            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.text, flex: 1 }}>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.text, flex: 1 }}>
               {sig.label}
             </span>
           </div>
@@ -57,8 +104,8 @@ function ScorePanel({ score, horizon, C, D }) {
   ];
 
   return (
-    <div style={{ marginTop: 12, padding: '10px 14px', background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4 }}>
-      <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 10 }}>STOCK SCORE</div>
+    <div style={{ marginTop: 12, padding: D.panelBodyPad, background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4 }}>
+      <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.panelTitle, color: C.dim, letterSpacing: '0.1em', marginBottom: 10 }}>STOCK SCORE</div>
       <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
           <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
@@ -71,20 +118,20 @@ function ScorePanel({ score, horizon, C, D }) {
             position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
           }}>
-            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 24, color: verdictColor, lineHeight: 1 }}>{score.total}</span>
-            <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginTop: 2 }}>SCORE</span>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.badgeFont, color: verdictColor, lineHeight: 1 }}>{score.total}</span>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.statusFont, color: C.dim, marginTop: 2 }}>SCORE</span>
           </div>
         </div>
         <div style={{ flex: 1, minWidth: 180 }}>
           {bars.map(b => (
             <div key={b.label} style={{ marginBottom: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim }}>
+                <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.scoreLabel, color: C.dim }}>
                   {b.label} <span style={{ color: C.dimmer }}>x{b.weight}</span>
                 </span>
-                <span style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: b.color }}>{Math.round(b.score)}%</span>
+                <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.scoreVal, color: b.color }}>{Math.round(b.score)}%</span>
               </div>
-              <div style={{ height: 4, background: C.dimmer, borderRadius: 2 }}>
+              <div style={{ height: D.barH, background: C.dimmer, borderRadius: 2 }}>
                 <div style={{
                   height: '100%', width: `${b.score}%`, background: b.color,
                   borderRadius: 2, transition: 'width 1s ease', boxShadow: `0 0 4px ${b.color}80`,
@@ -93,12 +140,12 @@ function ScorePanel({ score, horizon, C, D }) {
             </div>
           ))}
           <div style={{
-            fontFamily: 'Share Tech Mono', fontSize: 10, marginTop: 6,
+            fontFamily: 'Share Tech Mono', fontSize: D.scoreLabel, marginTop: 6,
             padding: '4px 12px', display: 'inline-block', borderRadius: 3,
             background: `${verdictColor}18`, border: `1px solid ${verdictColor}60`, color: verdictColor,
             fontWeight: 700, letterSpacing: '0.1em',
           }}>{score.verdict}</div>
-          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginLeft: 8 }}>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.statusFont, color: C.dim, marginLeft: 8 }}>
             Based on {HORIZON_LABELS[horizon] || horizon} horizon
           </span>
         </div>
@@ -167,14 +214,14 @@ function RiskCalculator({ data, C, D, isDesktop, candleSeriesRef }) {
   }, [stopLoss, target, candleSeriesRef, C]);
 
   return (
-    <div style={{ marginTop: 12, padding: '10px 14px', background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4 }}>
-      <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 4 }}>RISK CALCULATOR</div>
-      <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.dim, marginBottom: 10, opacity: 0.7 }}>
+    <div style={{ marginTop: 12, padding: D.panelBodyPad, background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4 }}>
+      <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.panelTitle, color: C.dim, letterSpacing: '0.1em', marginBottom: 4 }}>RISK CALCULATOR</div>
+      <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.dim, marginBottom: 10, opacity: 0.7 }}>
         Enter your account size and risk tolerance to calculate position sizing.
       </div>
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <label style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.text }}>YOUR ACCOUNT SIZE ($)</label>
+          <label style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.text }}>YOUR ACCOUNT SIZE ($)</label>
           <input
             type="number"
             value={accountSize || ''}
@@ -182,20 +229,20 @@ function RiskCalculator({ data, C, D, isDesktop, candleSeriesRef }) {
             onChange={e => saveAccount(e.target.value)}
             style={{
               background: C.bg, border: `1px solid ${hasAccount ? C.blue : C.dimmer}`, color: C.text,
-              padding: '8px 12px', fontFamily: 'Share Tech Mono', fontSize: 13,
+              padding: '8px 12px', fontFamily: 'Share Tech Mono', fontSize: D.rowValue,
               borderRadius: 3, width: 160,
             }}
           />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <label style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: C.text }}>RISK PER TRADE</label>
+          <label style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.text }}>RISK PER TRADE</label>
           <div style={{ display: 'flex', gap: 4 }}>
             {[0.5, 1, 2].map(pct => (
               <button key={pct} onClick={() => saveRisk(pct)} style={{
                 background: riskPct === pct ? `${C.blue}20` : 'transparent',
                 border: `1px solid ${riskPct === pct ? C.blue : C.dimmer}`,
                 color: riskPct === pct ? C.blue : C.dim,
-                padding: '5px 10px', fontFamily: 'Share Tech Mono', fontSize: 11,
+                padding: '5px 10px', fontFamily: 'Share Tech Mono', fontSize: D.rowStatus,
                 cursor: 'pointer', borderRadius: 3,
               }}>{pct}%</button>
             ))}
@@ -210,8 +257,8 @@ function RiskCalculator({ data, C, D, isDesktop, candleSeriesRef }) {
           { label: 'R:R RATIO', value: `${rrRatio.toFixed(1)}:1`, color: rrColor },
         ].map(item => (
           <div key={item.label}>
-            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginBottom: 2 }}>{item.label}</div>
-            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 13, color: item.color, fontWeight: 700 }}>{item.value}</div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.scoreLabel, color: C.dim, marginBottom: 2 }}>{item.label}</div>
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowValue, color: item.color, fontWeight: 700 }}>{item.value}</div>
           </div>
         ))}
       </div>
@@ -226,19 +273,19 @@ function RiskCalculator({ data, C, D, isDesktop, candleSeriesRef }) {
                 { label: 'STOP DISTANCE', value: `$${riskPerShare.toFixed(2)}`, color: C.dim },
               ].map(item => (
                 <div key={item.label}>
-                  <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginBottom: 2 }}>{item.label}</div>
-                  <div style={{ fontFamily: 'Share Tech Mono', fontSize: 13, color: item.color, fontWeight: 700 }}>{item.value}</div>
+                  <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.scoreLabel, color: C.dim, marginBottom: 2 }}>{item.label}</div>
+                  <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowValue, color: item.color, fontWeight: 700 }}>{item.value}</div>
                 </div>
               ))}
             </div>
           </div>
-          <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, marginTop: 8, fontStyle: 'italic', opacity: 0.7 }}>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.statusFont, color: C.dim, marginTop: 8, fontStyle: 'italic', opacity: 0.7 }}>
             Position sized so that hitting the stop loss costs at most {riskPct}% of your account (${riskAmount.toFixed(0)}).
           </div>
         </>
       ) : (
         <div style={{
-          fontFamily: 'Share Tech Mono', fontSize: 11, color: C.dim, textAlign: 'center',
+          fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.dim, textAlign: 'center',
           padding: '14px 0', marginTop: 10, borderTop: `1px solid ${C.dimmer}`,
         }}>
           Set your account size above to see position sizing.
@@ -288,18 +335,18 @@ Write exactly 3 sentences. Be specific about numbers and conditions. End with on
   };
 
   return (
-    <div style={{ marginTop: 12, padding: '10px 14px', background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4 }}>
+    <div style={{ marginTop: 12, padding: D.panelBodyPad, background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: analysis ? 10 : 0 }}>
-        <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em' }}>AI ANALYSIS</div>
+        <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.panelTitle, color: C.dim, letterSpacing: '0.1em' }}>AI ANALYSIS</div>
         <button onClick={runAnalysis} disabled={loading} style={{
           background: loading ? C.dimmer : `${C.blue}20`, border: `1px solid ${C.blue}`,
-          color: C.blue, padding: '5px 14px', fontFamily: 'Share Tech Mono', fontSize: 10,
+          color: C.blue, padding: '5px 14px', fontFamily: 'Share Tech Mono', fontSize: D.rowLabel,
           cursor: loading ? 'default' : 'pointer', borderRadius: 3, opacity: loading ? 0.6 : 1,
         }}>{loading ? 'ANALYZING...' : 'RUN AI ANALYSIS'}</button>
       </div>
       {analysis && (
         <div style={{
-          fontFamily: 'Share Tech Mono', fontSize: 11, color: C.text, lineHeight: 1.6,
+          fontFamily: 'Share Tech Mono', fontSize: D.aiFont, color: C.text, lineHeight: 1.6,
           padding: '8px 12px', background: C.bg, borderRadius: 3, border: `1px solid ${C.dimmer}`,
         }}>{analysis}</div>
       )}
@@ -327,7 +374,7 @@ export function StockDetailView({
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [smaToggles, setSmaToggles] = useState({ 20: true, 50: true, 100: false, 200: true });
+  const [smaToggles, setSmaToggles] = useState({ 50: true, 200: true });
 
   useEffect(() => {
     let cancelled = false;
@@ -361,22 +408,24 @@ export function StockDetailView({
           handleScroll: { vertTouchDrag: false, horzTouchDrag: false },
           handleScale: { pinch: false },
         };
-    const mkOpts = (h) => ({
+    const mkOpts = (h, hideTimeAxis = false) => ({
       width: chartW,
       height: h,
-      layout: { background: { type: 'solid', color: C.bg }, textColor: C.dim, fontFamily: 'Share Tech Mono', fontSize: 10 },
+      layout: { background: { type: 'solid', color: C.bg }, textColor: C.dim, fontFamily: 'Share Tech Mono', fontSize: D.maLegend },
       grid: { vertLines: { color: C.dimmer }, horzLines: { color: C.dimmer } },
       crosshair: { mode: CrosshairMode.Normal },
       ...touchOpts,
       rightPriceScale: { borderColor: C.dimmer },
-      timeScale: { borderColor: C.dimmer, timeVisible: isIntraday, secondsVisible: false },
+      timeScale: hideTimeAxis
+        ? { visible: false }
+        : { borderColor: C.dimmer, timeVisible: isIntraday, secondsVisible: false },
     });
 
     const mainH = isDesktop ? 400 : 280;
     const volH = isDesktop ? 90 : 70;
     const subH = isDesktop ? 110 : 90;
 
-    const mainChart = createChart(mainRef.current, mkOpts(mainH));
+    const mainChart = createChart(mainRef.current, mkOpts(mainH, true));
     const candleSeries = mainChart.addCandlestickSeries({
       upColor: C.yes, downColor: C.no,
       borderUpColor: C.yes, borderDownColor: C.no,
@@ -385,8 +434,8 @@ export function StockDetailView({
     candleSeries.setData(chartData.ohlc);
     candleSeriesRef.current = candleSeries;
 
-    const smaColors = { 20: C.sma20, 50: C.sma50, 100: C.sma100, 200: C.sma200 };
-    [20, 50, 100, 200].forEach(p => {
+    const smaColors = { 50: C.sma50, 200: C.sma200 };
+    [50, 200].forEach(p => {
       if (smaToggles[p]) {
         const smaData = calcSMASeries(chartData.allCloses, chartData.allTimestamps, p);
         if (smaData.length > 0) {
@@ -409,7 +458,7 @@ export function StockDetailView({
     }
 
     const volChart = createChart(volRef.current, {
-      ...mkOpts(volH),
+      ...mkOpts(volH, true),
       rightPriceScale: { borderColor: C.dimmer, scaleMargins: { top: 0.1, bottom: 0 } },
     });
     const volSeries = volChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false });
@@ -421,7 +470,7 @@ export function StockDetailView({
     volSeries.setData(volData);
 
     const rsiChart = createChart(rsiRef.current, {
-      ...mkOpts(subH),
+      ...mkOpts(subH, true),
       rightPriceScale: { borderColor: C.dimmer, scaleMargins: { top: 0.08, bottom: 0.08 } },
     });
     const rsiSeries = rsiChart.addLineSeries({ color: C.blue, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true });
@@ -437,7 +486,7 @@ export function StockDetailView({
       histSeries.setData(macdData.histogram.map(h => ({ ...h, color: h.value >= 0 ? C.yes + '99' : C.no + '99' })));
       const macdLineSeries = macdChart.addLineSeries({ color: C.blue, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
       macdLineSeries.setData(macdData.macd);
-      const signalSeries = macdChart.addLineSeries({ color: C.sma20, lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false });
+      const signalSeries = macdChart.addLineSeries({ color: C.caution, lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false });
       signalSeries.setData(macdData.signal);
     }
 
@@ -485,30 +534,30 @@ export function StockDetailView({
   }, [chartData, smaToggles, isDesktop, C]);
 
   const toggleSMA = (p) => setSmaToggles(prev => ({ ...prev, [p]: !prev[p] }));
-  const smaColors = { 20: C.sma20, 50: C.sma50, 100: C.sma100, 200: C.sma200 };
+  const smaColors = { 50: C.sma50, 200: C.sma200 };
 
   return (
     <div className="fade-in" style={{ padding: '0 0 80px' }}>
-      <div style={{ background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}`, padding: isDesktop ? '12px 32px' : '10px 14px' }}>
+      <div style={{ background: C.bgPanel, borderBottom: `1px solid ${C.dimmer}`, padding: D.panelHdrPad }}>
         <div style={{ maxWidth: D.contentMax, margin: D.contentMax ? '0 auto' : undefined }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
             <button onClick={onBack} style={{
               background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim,
-              padding: '6px 12px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: 12, borderRadius: 3,
+              padding: '6px 12px', cursor: 'pointer', fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, borderRadius: 3,
             }}>&larr; BACK</button>
-            <span style={{ fontFamily: 'Share Tech Mono', fontSize: isDesktop ? 22 : 18, color: C.text, fontWeight: 700 }}>{symbol}</span>
+            <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.cardSymbol, color: C.text, fontWeight: 700 }}>{symbol}</span>
             {chartData && (
               <>
-                <span style={{ fontFamily: 'Share Tech Mono', fontSize: isDesktop ? 18 : 14, color: C.text }}>{chartData.price?.toFixed(2)}</span>
+                <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.hdrTitle, color: C.text }}>{chartData.price?.toFixed(2)}</span>
                 <span style={{
-                  fontFamily: 'Share Tech Mono', fontSize: isDesktop ? 14 : 12,
+                  fontFamily: 'Share Tech Mono', fontSize: D.cardChange,
                   color: chartData.change1d >= 0 ? C.yes : C.no,
                 }}>{chartData.change1d >= 0 ? '+' : ''}{chartData.change1d?.toFixed(2)}%</span>
               </>
             )}
             {stockScore && (
               <span style={{
-                fontFamily: 'Share Tech Mono', fontSize: 12, fontWeight: 700,
+                fontFamily: 'Share Tech Mono', fontSize: D.scoreLabel, fontWeight: 700,
                 padding: '3px 12px', borderRadius: 10,
                 background: `${stockScore.verdict === 'BUY' ? C.yes : stockScore.verdict === 'SELL' || stockScore.verdict === 'AVOID' ? C.no : C.caution}18`,
                 border: `1px solid ${stockScore.verdict === 'BUY' ? C.yes : stockScore.verdict === 'SELL' || stockScore.verdict === 'AVOID' ? C.no : C.caution}60`,
@@ -517,7 +566,7 @@ export function StockDetailView({
             )}
             {earningsDays != null && (
               <span style={{
-                fontFamily: 'Share Tech Mono', fontSize: 10,
+                fontFamily: 'Share Tech Mono', fontSize: D.rowStatus,
                 padding: '3px 10px', borderRadius: 3,
                 background: `${C.caution}18`, border: `1px solid ${C.caution}40`, color: C.caution,
               }}>EARNINGS IN {earningsDays}d</span>
@@ -530,19 +579,19 @@ export function StockDetailView({
                 border: `1px solid ${timeframe === tf.key ? C.blue : C.dimmer}`,
                 color: timeframe === tf.key ? C.blue : C.dim,
                 padding: isDesktop ? '6px 16px' : '5px 12px',
-                fontFamily: 'Share Tech Mono', fontSize: isDesktop ? 12 : 11,
+                fontFamily: 'Share Tech Mono', fontSize: D.rowLabel,
                 cursor: 'pointer', borderRadius: 3,
               }}>{tf.key}</button>
             ))}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {[20, 50, 100, 200].map(p => (
+            {[50, 200].map(p => (
               <button key={p} onClick={() => toggleSMA(p)} style={{
                 background: smaToggles[p] ? `${smaColors[p]}18` : 'transparent',
                 border: `1px solid ${smaToggles[p] ? smaColors[p] : C.dimmer}`,
                 color: smaToggles[p] ? smaColors[p] : C.dim,
                 padding: isDesktop ? '4px 12px' : '3px 8px',
-                fontFamily: 'Share Tech Mono', fontSize: isDesktop ? 11 : 10,
+                fontFamily: 'Share Tech Mono', fontSize: D.maLegend,
                 cursor: 'pointer', borderRadius: 3,
                 boxShadow: smaToggles[p] ? `0 0 6px ${smaColors[p]}40` : 'none',
               }}>{smaToggles[p] ? '\u25CF' : '\u25CB'} SMA{p}</button>
@@ -568,26 +617,29 @@ export function StockDetailView({
               padding: isDesktop ? '14px' : '10px', overflow: 'hidden',
               touchAction: 'pan-y',
             }}>
-              <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 6 }}>PRICE</div>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.maLegend, color: C.dim, letterSpacing: '0.1em' }}>PRICE + VOL</span>
+                {[50, 200].filter(p => smaToggles[p]).map(p => (
+                  <span key={p} style={{ fontFamily: 'Share Tech Mono', fontSize: D.maLegend, color: smaColors[p] }}>
+                    {'\u25CF'} SMA {p}
+                  </span>
+                ))}
+                <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.maLegend, color: C.blue }}>{'\u25CF'} RSI</span>
+                <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.maLegend, color: C.blue }}>{'\u25CF'} MACD</span>
+              </div>
               <div ref={mainRef} />
-              <div style={{ borderTop: `1px solid ${C.dimmer}`, margin: '6px 0' }} />
-              <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 4 }}>VOLUME</div>
-              <div ref={volRef} />
-              <div style={{ borderTop: `1px solid ${C.dimmer}`, margin: '6px 0' }} />
-              <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 4 }}>RSI (14)</div>
-              <div ref={rsiRef} />
-              <div style={{ borderTop: `1px solid ${C.dimmer}`, margin: '6px 0' }} />
-              <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 4 }}>MACD (12, 26, 9)</div>
-              <div ref={macdRef} />
+              <div ref={volRef} style={{ marginTop: -1 }} />
+              <div ref={rsiRef} style={{ marginTop: -1 }} />
+              <div ref={macdRef} style={{ marginTop: -1 }} />
             </div>
 
             {chartData?.srLevels?.length > 0 && (
-              <div style={{ marginTop: 12, padding: '10px 14px', background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4 }}>
-                <div style={{ fontFamily: 'Share Tech Mono', fontSize: 9, color: C.dim, letterSpacing: '0.1em', marginBottom: 8 }}>SUPPORT & RESISTANCE</div>
+              <div style={{ marginTop: 12, padding: D.panelBodyPad, background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4 }}>
+                <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.panelTitle, color: C.dim, letterSpacing: '0.1em', marginBottom: 8 }}>SUPPORT & RESISTANCE</div>
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                   {chartData.srLevels.map((l, i) => (
                     <span key={i} style={{
-                      fontFamily: 'Share Tech Mono', fontSize: 11,
+                      fontFamily: 'Share Tech Mono', fontSize: D.scoreVal,
                       color: l.type === 'support' ? C.yes : C.no,
                     }}>
                       {l.type === 'support' ? 'S' : 'R'}: {l.price.toFixed(2)} ({l.touches}x)
@@ -598,6 +650,7 @@ export function StockDetailView({
             )}
 
             <SignalsPanel signals={stockSignals} C={C} D={D} />
+            <SellSignalPanel data={chartData} score={stockScore} C={C} D={D} />
             <ScorePanel score={stockScore} horizon={horizon} C={C} D={D} />
             <RiskCalculator data={chartData} C={C} D={D} isDesktop={isDesktop} candleSeriesRef={candleSeriesRef} />
             <AIAnalysisPanel

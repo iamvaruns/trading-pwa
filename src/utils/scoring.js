@@ -94,89 +94,248 @@ const HORIZON_WEIGHTS = {
 
 function scoreTechnical(d, horizon) {
   let s = 50;
-  if (d.sma200 && d.sma50 && d.sma20) {
-    if (d.price > d.sma200 && d.price > d.sma50 && d.price > d.sma20) s += 30;
-    else if (d.price > d.sma200 && d.price > d.sma50) s += 20;
-    else if (d.price > d.sma200) s += 10;
-    else s -= 20;
+
+  if (horizon === 'SHORT') {
+    if (d.sma20 && d.sma50) {
+      if (d.price > d.sma20 && d.price > d.sma50) s += 25;
+      else if (d.price > d.sma20) s += 15;
+      else if (d.price < d.sma20 && d.price < d.sma50) s -= 20;
+      else s -= 10;
+    }
+    if (d.sma20 && d.sma50 && d.sma20Prev && d.sma50Prev) {
+      if (d.sma20Prev < d.sma50Prev && d.sma20 >= d.sma50) s += 15;
+      if (d.sma20Prev > d.sma50Prev && d.sma20 <= d.sma50) s -= 15;
+    }
+    if (d.rsi14 != null) {
+      if (d.rsi14 < 30) s += 20;
+      else if (d.rsi14 >= 40 && d.rsi14 <= 60) s += 10;
+      else if (d.rsi14 > 70) s -= 15;
+      else if (d.rsi14 > 50) s += 5;
+    }
+    if (d.macdLine != null && d.macdSignal != null) {
+      if (d.macdLine > d.macdSignal) s += 15;
+      else s -= 10;
+      if (d.macdLinePrev != null && d.macdSignalPrev != null) {
+        if (d.macdLinePrev < d.macdSignalPrev && d.macdLine >= d.macdSignal) s += 10;
+      }
+    }
+    if (d.bbLower != null && d.price && d.price <= d.bbLower) s += 12;
+
+  } else if (horizon === 'LONG') {
+    if (d.sma200 && d.sma50) {
+      if (d.price > d.sma200 && d.price > d.sma50) s += 30;
+      else if (d.price > d.sma200) s += 15;
+      else s -= 25;
+    }
+    if (d.sma50 && d.sma200 && d.sma50Prev && d.sma200Prev) {
+      if (d.sma50Prev < d.sma200Prev && d.sma50 >= d.sma200) s += 20;
+      if (d.sma50Prev > d.sma200Prev && d.sma50 <= d.sma200) s -= 20;
+    }
+    if (d.rsi14 != null) {
+      if (d.rsi14 >= 40 && d.rsi14 <= 65) s += 10;
+      else if (d.rsi14 < 30) s += 5;
+      else if (d.rsi14 > 75) s -= 10;
+    }
+    if (d.macdLine != null && d.macdSignal != null) {
+      if (d.macdLine > d.macdSignal) s += 10;
+      else s -= 5;
+    }
+    if (d.percentile1y != null && d.percentile1y < 20) s += 10;
+
+  } else {
+    if (d.sma200 && d.sma50 && d.sma20) {
+      if (d.price > d.sma200 && d.price > d.sma50 && d.price > d.sma20) s += 30;
+      else if (d.price > d.sma200 && d.price > d.sma50) s += 20;
+      else if (d.price > d.sma200) s += 10;
+      else s -= 20;
+    }
+    if (d.rsi14 != null) {
+      if (d.rsi14 >= 40 && d.rsi14 <= 60) s += 15;
+      else if (d.rsi14 < 30) s += 10;
+      else if (d.rsi14 > 70) s -= 10;
+      else if (d.rsi14 > 50) s += 5;
+    }
+    if (d.macdLine != null && d.macdSignal != null) {
+      if (d.macdLine > d.macdSignal) s += 15;
+      else s -= 10;
+    }
+    if (d.bbLower != null && d.price && d.price <= d.bbLower) s += 8;
   }
-  if (d.rsi14 != null) {
-    if (d.rsi14 >= 40 && d.rsi14 <= 60) s += 15;
-    else if (d.rsi14 < 30) s += (horizon === 'SHORT' ? 20 : 5);
-    else if (d.rsi14 > 70) s -= 10;
-    else if (d.rsi14 > 50) s += 5;
-  }
-  if (d.macdLine != null && d.macdSignal != null) {
-    if (d.macdLine > d.macdSignal) s += 15;
-    else s -= 10;
-  }
-  if (d.bbLower != null && d.price && d.price <= d.bbLower) {
-    s += (horizon === 'SHORT' ? 10 : 5);
-  }
+
   return clamp(s);
 }
 
 function scoreMomentumStock(d, rs, horizon) {
   let s = 50;
-  const rsKey = horizon === 'SHORT' ? 'rs1m' : horizon === 'MEDIUM' ? 'rs3m' : 'rs1y';
-  const rsVal = rs?.[rsKey] || 1;
-  if (rsVal > 1.2) s += 25;
-  else if (rsVal > 1.0) s += 10;
-  else if (rsVal > 0.8) s += 0;
-  else s -= 15;
 
-  if (d.slope5d != null) {
-    if (d.slope5d > 0) s += 10;
-    else s -= 5;
+  if (horizon === 'SHORT') {
+    const rsVal = rs?.rs1m || 1;
+    if (rsVal > 1.15) s += 25;
+    else if (rsVal > 1.0) s += 12;
+    else if (rsVal < 0.85) s -= 20;
+    else if (rsVal < 1.0) s -= 8;
+
+    if (d.slope5d != null) {
+      if (d.slope5d > 0) s += 15;
+      else s -= 10;
+    }
+    if (d.volume && d.avgVol20 && d.avgVol20 > 0) {
+      const ratio = d.volume / d.avgVol20;
+      if (ratio > 2.0) s += 15;
+      else if (ratio > 1.5) s += 10;
+      else if (ratio < 0.5) s -= 8;
+    }
+
+  } else if (horizon === 'LONG') {
+    const rs6m = rs?.rs6m || 1;
+    const rs1y = rs?.rs1y || 1;
+    const rsAvg = (rs6m + rs1y) / 2;
+    if (rsAvg > 1.2) s += 25;
+    else if (rsAvg > 1.05) s += 12;
+    else if (rsAvg < 0.8) s -= 20;
+    else if (rsAvg < 0.95) s -= 8;
+
+    if (d.slope5d != null) {
+      if (d.slope5d > 0) s += 5;
+      else s -= 3;
+    }
+    if (d.change1d != null) {
+      if (Math.abs(d.change1d) < 1) s += 5;
+    }
+
+  } else {
+    const rsVal = rs?.rs3m || 1;
+    if (rsVal > 1.2) s += 25;
+    else if (rsVal > 1.0) s += 10;
+    else if (rsVal < 0.8) s -= 15;
+
+    if (d.slope5d != null) {
+      if (d.slope5d > 0) s += 10;
+      else s -= 5;
+    }
+    if (d.volume && d.avgVol20 && d.avgVol20 > 0) {
+      const ratio = d.volume / d.avgVol20;
+      if (ratio > 1.5) s += 10;
+      else if (ratio < 0.5) s -= 5;
+    }
   }
 
-  if (d.volume && d.avgVol20 && d.avgVol20 > 0) {
-    const ratio = d.volume / d.avgVol20;
-    if (ratio > 1.5) s += 10;
-    else if (ratio < 0.5) s -= 5;
-  }
   return clamp(s);
 }
 
-function scoreRisk(d) {
+function scoreRisk(d, horizon) {
   let s = 70;
+
   if (d.atr14 && d.price) {
     const atrPct = d.atr14 / d.price;
-    if (atrPct < 0.02) s += 20;
-    else if (atrPct < 0.03) s += 10;
-    else if (atrPct > 0.04) s -= 15;
+    if (horizon === 'SHORT') {
+      if (atrPct < 0.015) s += 25;
+      else if (atrPct < 0.025) s += 12;
+      else if (atrPct > 0.04) s -= 25;
+      else if (atrPct > 0.03) s -= 12;
+    } else if (horizon === 'LONG') {
+      if (atrPct < 0.02) s += 15;
+      else if (atrPct < 0.03) s += 8;
+      else if (atrPct > 0.05) s -= 10;
+    } else {
+      if (atrPct < 0.02) s += 20;
+      else if (atrPct < 0.03) s += 10;
+      else if (atrPct > 0.04) s -= 15;
+    }
   }
+
   if (d.srLevels && d.price) {
     const nearSupport = d.srLevels.find(l => l.type === 'support' && Math.abs(d.price - l.price) / d.price < 0.05);
     const nearResistance = d.srLevels.find(l => l.type === 'resistance' && Math.abs(d.price - l.price) / d.price < 0.05);
-    if (nearSupport) s += 15;
-    if (nearResistance) s -= 10;
+    if (horizon === 'SHORT') {
+      if (nearSupport) s += 20;
+      if (nearResistance) s -= 15;
+    } else if (horizon === 'LONG') {
+      if (nearSupport) s += 8;
+      if (nearResistance) s -= 5;
+    } else {
+      if (nearSupport) s += 15;
+      if (nearResistance) s -= 10;
+    }
   }
+
+  if (d.bbWidth != null && d.bbWidthPercentile != null) {
+    if (horizon === 'SHORT') {
+      if (d.bbWidthPercentile < 10) s += 10;
+      else if (d.bbWidthPercentile > 90) s -= 10;
+    }
+  }
+
   return clamp(s);
 }
 
-function scoreFundamental(fund) {
+function scoreFundamental(fund, horizon) {
   if (!fund) return 50;
   let s = 50;
-  if (fund.forwardPE != null) {
-    if (fund.forwardPE < 15) s += 25;
-    else if (fund.forwardPE < 25) s += 10;
-    else if (fund.forwardPE > 40) s -= 15;
+
+  if (horizon === 'SHORT') {
+    if (fund.forwardPE != null) {
+      if (fund.forwardPE < 15) s += 10;
+      else if (fund.forwardPE < 25) s += 5;
+      else if (fund.forwardPE > 40) s -= 5;
+    }
+    if (fund.revenueGrowth != null) {
+      if (fund.revenueGrowth > 0.20) s += 10;
+      else if (fund.revenueGrowth > 0.10) s += 5;
+      else if (fund.revenueGrowth < 0) s -= 8;
+    }
+    if (fund.earningsDate) {
+      const daysToEarnings = (fund.earningsDate * 1000 - Date.now()) / (1000 * 60 * 60 * 24);
+      if (daysToEarnings > 0 && daysToEarnings < 7) s -= 25;
+      else if (daysToEarnings > 0 && daysToEarnings < 14) s -= 18;
+      else if (daysToEarnings > 0 && daysToEarnings < 30) s -= 10;
+    }
+
+  } else if (horizon === 'LONG') {
+    if (fund.forwardPE != null) {
+      if (fund.forwardPE < 15) s += 30;
+      else if (fund.forwardPE < 25) s += 15;
+      else if (fund.forwardPE > 40) s -= 20;
+      else if (fund.forwardPE > 30) s -= 10;
+    }
+    if (fund.revenueGrowth != null) {
+      if (fund.revenueGrowth > 0.20) s += 25;
+      else if (fund.revenueGrowth > 0.10) s += 15;
+      else if (fund.revenueGrowth > 0) s += 5;
+      else s -= 20;
+    }
+    if (fund.profitMargins != null) {
+      if (fund.profitMargins > 0.20) s += 20;
+      else if (fund.profitMargins > 0.10) s += 10;
+      else if (fund.profitMargins < 0) s -= 15;
+    }
+    if (fund.earningsDate) {
+      const daysToEarnings = (fund.earningsDate * 1000 - Date.now()) / (1000 * 60 * 60 * 24);
+      if (daysToEarnings > 0 && daysToEarnings < 14) s -= 5;
+    }
+
+  } else {
+    if (fund.forwardPE != null) {
+      if (fund.forwardPE < 15) s += 25;
+      else if (fund.forwardPE < 25) s += 10;
+      else if (fund.forwardPE > 40) s -= 15;
+    }
+    if (fund.revenueGrowth != null) {
+      if (fund.revenueGrowth > 0.20) s += 20;
+      else if (fund.revenueGrowth > 0.10) s += 10;
+      else if (fund.revenueGrowth < 0) s -= 15;
+    }
+    if (fund.profitMargins != null) {
+      if (fund.profitMargins > 0.20) s += 15;
+      else if (fund.profitMargins > 0.10) s += 5;
+      else if (fund.profitMargins < 0) s -= 10;
+    }
+    if (fund.earningsDate) {
+      const daysToEarnings = (fund.earningsDate * 1000 - Date.now()) / (1000 * 60 * 60 * 24);
+      if (daysToEarnings > 0 && daysToEarnings < 14) s -= 15;
+    }
   }
-  if (fund.revenueGrowth != null) {
-    if (fund.revenueGrowth > 0.20) s += 20;
-    else if (fund.revenueGrowth > 0.10) s += 10;
-    else if (fund.revenueGrowth < 0) s -= 15;
-  }
-  if (fund.profitMargins != null) {
-    if (fund.profitMargins > 0.20) s += 15;
-    else if (fund.profitMargins > 0.10) s += 5;
-    else if (fund.profitMargins < 0) s -= 10;
-  }
-  if (fund.earningsDate) {
-    const daysToEarnings = (fund.earningsDate * 1000 - Date.now()) / (1000 * 60 * 60 * 24);
-    if (daysToEarnings > 0 && daysToEarnings < 14) s -= 15;
-  }
+
   return clamp(s);
 }
 
@@ -184,17 +343,29 @@ export function scoreStock(data, fundamentals, rsData, horizon = 'MEDIUM') {
   const weights = HORIZON_WEIGHTS[horizon] || HORIZON_WEIGHTS.MEDIUM;
   const technical = scoreTechnical(data, horizon);
   const momentum = scoreMomentumStock(data, rsData, horizon);
-  const risk = scoreRisk(data);
-  const fundamental = scoreFundamental(fundamentals);
+  const risk = scoreRisk(data, horizon);
+  const fundamental = scoreFundamental(fundamentals, horizon);
   const total = Math.round(
     technical * weights.technical +
     momentum * weights.momentum +
     risk * weights.risk +
     fundamental * weights.fundamental
   );
+
   let verdict = 'HOLD';
-  if (total >= 70) verdict = 'BUY';
-  else if (total < 30) verdict = 'AVOID';
-  else if (total < 50) verdict = 'SELL';
-  return { total, technical, momentum, risk, fundamental, verdict };
+  if (horizon === 'SHORT') {
+    if (total >= 72) verdict = 'BUY';
+    else if (total < 32) verdict = 'AVOID';
+    else if (total < 48) verdict = 'SELL';
+  } else if (horizon === 'LONG') {
+    if (total >= 68) verdict = 'BUY';
+    else if (total < 28) verdict = 'AVOID';
+    else if (total < 50) verdict = 'SELL';
+  } else {
+    if (total >= 70) verdict = 'BUY';
+    else if (total < 30) verdict = 'AVOID';
+    else if (total < 50) verdict = 'SELL';
+  }
+
+  return { total, technical, momentum, risk, fundamental, verdict, horizon };
 }

@@ -22,3 +22,8 @@
   from = "/api/yahoo-quote"
   to = "/.netlify/functions/yahoo-quote"
   status = 200
+
+[[redirects]]
+  from = "/api/yahoo-search"
+  to = "/.netlify/functions/yahoo-search"
+  status = 200

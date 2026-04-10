@@ -285,6 +285,69 @@ export function detectSignals(data) {
   return signals;
 }
 
+export function detectSellSignals(data, score) {
+  const triggers = [];
+  if (!data || !data.price) return { verdict: 'HOLD POSITION', triggers };
+
+  if (data.sma50 && data.sma200 && data.sma50Prev && data.sma200Prev) {
+    if (data.sma50Prev > data.sma200Prev && data.sma50 <= data.sma200) {
+      triggers.push({ severity: 'high', label: 'Death Cross — SMA 50 crossed below SMA 200. Major bearish reversal signal.' });
+    }
+  }
+
+  if (data.sma200 && data.price < data.sma200) {
+    triggers.push({ severity: 'high', label: `Price ($${data.price.toFixed(2)}) is below SMA 200 ($${data.sma200.toFixed(2)}). Long-term trend is broken.` });
+  }
+
+  if (data.sma50 && data.price < data.sma50) {
+    triggers.push({ severity: 'medium', label: `Price ($${data.price.toFixed(2)}) is below SMA 50 ($${data.sma50.toFixed(2)}). Intermediate trend weakening.` });
+  }
+
+  if (data.rsi14 != null && data.rsi14 > 70) {
+    triggers.push({ severity: 'medium', label: `RSI at ${data.rsi14.toFixed(0)} — overbought. Consider taking partial profits.` });
+  }
+
+  if (data.macdLine != null && data.macdSignal != null && data.macdLinePrev != null && data.macdSignalPrev != null) {
+    if (data.macdLinePrev > data.macdSignalPrev && data.macdLine <= data.macdSignal) {
+      triggers.push({ severity: 'medium', label: 'MACD crossed below signal line. Bearish momentum shift.' });
+    }
+  }
+
+  if (data.atr14 && data.price && data.allHighs) {
+    const recentHighs = validClose(data.allHighs).slice(-20);
+    if (recentHighs.length > 0) {
+      const recentHigh = Math.max(...recentHighs);
+      const trailingStop = recentHigh - 2 * data.atr14;
+      if (data.price < trailingStop) {
+        triggers.push({ severity: 'high', label: `Price fell below trailing stop ($${trailingStop.toFixed(2)}). Recent high was $${recentHigh.toFixed(2)}, drop exceeds 2x ATR.` });
+      }
+    }
+  }
+
+  if (data.srLevels && data.price && data.rsi14 != null) {
+    const nearResistance = data.srLevels.find(l => l.type === 'resistance' && Math.abs(data.price - l.price) / data.price < 0.02);
+    if (nearResistance && data.rsi14 > 60) {
+      triggers.push({ severity: 'medium', label: `Price near resistance at $${nearResistance.price.toFixed(2)} with elevated RSI (${data.rsi14.toFixed(0)}). Watch for rejection.` });
+    }
+  }
+
+  if (score && (score.verdict === 'SELL' || score.verdict === 'AVOID')) {
+    triggers.push({ severity: 'high', label: `Composite score is ${score.total}/100 (${score.verdict}). Multiple factors indicate downside risk.` });
+  }
+
+  const highCount = triggers.filter(t => t.severity === 'high').length;
+  const medCount = triggers.filter(t => t.severity === 'medium').length;
+
+  let verdict = 'HOLD POSITION';
+  if (highCount >= 2 || (highCount >= 1 && medCount >= 2)) {
+    verdict = 'SELL NOW';
+  } else if (highCount >= 1 || medCount >= 2) {
+    verdict = 'CONSIDER SELLING';
+  }
+
+  return { verdict, triggers };
+}
+
 export function processChart(result) {
   const meta = result.meta || {};
   const timestamps = result.timestamp || [];

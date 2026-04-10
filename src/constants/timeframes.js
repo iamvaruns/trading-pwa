@@ -1,9 +1,9 @@
 export const CHART_TIMEFRAMES = [
-  { key: '1H', range: '1d', interval: '2m' },
-  { key: '4H', range: '5d', interval: '15m' },
-  { key: '1D', range: '1d', interval: '5m' },
-  { key: '1M', range: '1mo', interval: '60m' },
   { key: '1Y', range: '1y', interval: '1d' },
+  { key: '1M', range: '1mo', interval: '60m' },
+  { key: '1D', range: '1d', interval: '5m' },
+  { key: '4H', range: '5d', interval: '15m' },
+  { key: '1H', range: '1d', interval: '2m' },
 ];
 
 export const FOMC_DATES = [
@@ -19,9 +19,7 @@ export const DEFAULT_SETTINGS = {
 };
 
 export const DEFAULT_INDICATORS = {
-  sma20: true,
   sma50: true,
-  sma100: false,
   sma200: true,
   volume: true,
 };

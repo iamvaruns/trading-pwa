@@ -61,7 +61,7 @@ export function StockCard({ data, indicators, onRemove, onClick, score, signals,
           )}
           <Sparkline
             closes={data.closes} width={D.sparkW} height={D.sparkH}
-            showSMA={{ 20: indicators.sma20, 50: indicators.sma50 }}
+            showSMA={{ 50: indicators.sma50 }}
           />
         </div>
       </div>
@@ -97,9 +97,7 @@ export function StockCard({ data, indicators, onRemove, onClick, score, signals,
       )}
 
       <div>
-        <SMATag label="SMA 20" price={data.price} sma={data.sma20} color={C.sma20} visible={indicators.sma20} />
         <SMATag label="SMA 50" price={data.price} sma={data.sma50} color={C.sma50} visible={indicators.sma50} />
-        <SMATag label="SMA 100" price={data.price} sma={data.sma100} color={C.sma100} visible={indicators.sma100} />
         <SMATag label="SMA 200" price={data.price} sma={data.sma200} color={C.sma200} visible={indicators.sma200} />
         <VolumeBar volume={data.volume} avgVol={data.avgVol20} visible={indicators.volume} />
         <div style={{ display: 'flex', gap: 16, marginTop: 10 }}>

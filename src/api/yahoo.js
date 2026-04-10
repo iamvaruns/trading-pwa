@@ -21,3 +21,15 @@ export async function fetchYahooQuote(symbol) {
     return null;
   }
 }
+
+export async function searchYahooTickers(query) {
+  try {
+    const url = `${API_BASE}/api/yahoo-search?q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.quotes || [];
+  } catch {
+    return [];
+  }
+}

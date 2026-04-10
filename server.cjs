@@ -216,6 +216,43 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── API: Yahoo Search proxy ──────────────────────────────────────────────
+  if (pathname === '/api/yahoo-search') {
+    const query = (parsed.query.q || '').trim();
+    if (!query) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing query parameter q' }));
+      return;
+    }
+    console.log(`  🔍 Yahoo Search: ${query}`);
+    try {
+      const encoded = encodeURIComponent(query);
+      const sUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encoded}&quotesCount=12&newsCount=0&enableFuzzyQuery=true&quotesQueryId=tss_match_phrase_query`;
+      const sRes = await httpsGet(sUrl, { Accept: 'application/json', Referer: 'https://finance.yahoo.com/', Origin: 'https://finance.yahoo.com' });
+      const json = JSON.parse(sRes.body);
+      const allowedExchanges = new Set([
+        'NYQ', 'NMS', 'NGM', 'NCM', 'NYS', 'NAS', 'ASE', 'PCX', 'BTS',
+        'NSI', 'BSE', 'NSE', 'BOM',
+      ]);
+      const quotes = (json.quotes || [])
+        .filter(q => q.quoteType === 'EQUITY' && allowedExchanges.has(q.exchange))
+        .map(q => ({
+          symbol: q.symbol,
+          name: q.shortname || q.longname || q.symbol,
+          exchange: q.exchange,
+          exchDisp: q.exchDisp || q.exchange,
+        }))
+        .slice(0, 8);
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' });
+      res.end(JSON.stringify({ quotes }));
+    } catch (e) {
+      console.error(`  ✗ Yahoo Search error:`, e.message);
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+
   // ── API: FRED proxy ────────────────────────────────────────────────────────
   if (pathname === '/api/fred') {
     const seriesId = parsed.query.series;

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { DEFAULT_SCREENER, DEFAULT_INDICATORS } from '../constants';
 import { loadSPYData, loadStockDataWithScoring } from '../utils/data';
+import { searchYahooTickers } from '../api/yahoo';
 import { Sk } from '../components/ui/Skeleton';
 import { StockCard } from '../components/screener/StockCard';
 import { StockDetailView } from '../components/screener/StockDetailView';
@@ -29,9 +30,14 @@ export function ScreenerScreen() {
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
   const [selectedStock, setSelectedStock] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const spyRef = useRef([]);
   const spyLoadedRef = useRef(false);
+  const searchTimerRef = useRef(null);
+  const dropdownRef = useRef(null);
 
   useEffect(() => { localStorage.setItem('screener_stocks', JSON.stringify(stocks)); }, [stocks]);
   useEffect(() => { localStorage.setItem('screener_indicators', JSON.stringify(indicators)); }, [indicators]);
@@ -43,6 +49,30 @@ export function ScreenerScreen() {
       loadSPYData().then(closes => { spyRef.current = closes; });
     }
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    const q = input.trim();
+    if (q.length < 1) { setSearchResults([]); setShowDropdown(false); return; }
+    setSearchLoading(true);
+    searchTimerRef.current = setTimeout(async () => {
+      const results = await searchYahooTickers(q);
+      setSearchResults(results);
+      setShowDropdown(results.length > 0);
+      setSearchLoading(false);
+    }, 300);
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+  }, [input]);
 
   const fetchStock = useCallback(async (sym, h) => {
     const s = sym.toUpperCase().trim();
@@ -66,8 +96,8 @@ export function ScreenerScreen() {
     stocks.forEach(s => fetchStock(s, h));
   };
 
-  const addStock = () => {
-    const sym = input.toUpperCase().trim();
+  const addStock = (symbolOverride) => {
+    const sym = (symbolOverride || input).toUpperCase().trim();
     if (!sym) return;
     if (stocks.includes(sym)) {
       setError('Already in screener');
@@ -78,6 +108,8 @@ export function ScreenerScreen() {
     fetchStock(sym);
     setInput('');
     setError('');
+    setShowDropdown(false);
+    setSearchResults([]);
   };
 
   const removeStock = (sym) => {
@@ -89,9 +121,7 @@ export function ScreenerScreen() {
   const refreshAll = () => { setStockStore({}); stocks.forEach(s => fetchStock(s)); };
 
   const indicatorBtns = [
-    { key: 'sma20', label: 'SMA20', color: C.sma20 },
     { key: 'sma50', label: 'SMA50', color: C.sma50 },
-    { key: 'sma100', label: 'SMA100', color: C.sma100 },
     { key: 'sma200', label: 'SMA200', color: C.sma200 },
     { key: 'volume', label: 'VOL', color: C.yes },
   ];
@@ -120,27 +150,78 @@ export function ScreenerScreen() {
       }}>
         <div style={{ maxWidth: D.contentMax, margin: D.contentMax ? '0 auto' : undefined }}>
           <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-            <input
-              value={input}
-              onChange={e => setInput(e.target.value.toUpperCase())}
-              onKeyDown={e => e.key === 'Enter' && addStock()}
-              placeholder="ADD TICKER (e.g. AAPL)"
-              style={{
-                flex: 1, background: C.bgPanel, border: `1px solid ${C.dimmer}`, color: C.text,
-                padding: isDesktop ? '12px 16px' : '9px 12px',
-                fontFamily: 'Share Tech Mono', fontSize: isDesktop ? 14 : 13, borderRadius: 4,
-              }}
-            />
-            <button onClick={addStock} style={{
+            <div ref={dropdownRef} style={{ flex: 1, position: 'relative' }}>
+              <input
+                value={input}
+                onChange={e => setInput(e.target.value.toUpperCase())}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { addStock(); }
+                  if (e.key === 'Escape') { setShowDropdown(false); }
+                }}
+                onFocus={() => { if (searchResults.length > 0) setShowDropdown(true); }}
+                placeholder="SEARCH BY NAME OR SYMBOL"
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  background: C.bgPanel, border: `1px solid ${C.dimmer}`, color: C.text,
+                  padding: isDesktop ? '12px 16px' : '9px 12px',
+                  fontFamily: 'Share Tech Mono', fontSize: D.rowValue, borderRadius: 4,
+                }}
+              />
+              {searchLoading && input.trim().length > 0 && (
+                <div style={{
+                  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                  width: 14, height: 14, border: `2px solid ${C.blue}`,
+                  borderTopColor: 'transparent', borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite',
+                }} />
+              )}
+              {showDropdown && searchResults.length > 0 && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                  background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: '0 0 4px 4px',
+                  maxHeight: 280, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                }}>
+                  {searchResults.map(r => (
+                    <div
+                      key={r.symbol}
+                      onClick={() => addStock(r.symbol)}
+                      style={{
+                        padding: isDesktop ? '10px 16px' : '8px 12px', cursor: 'pointer',
+                        borderBottom: `1px solid ${C.dimmer}`,
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = `${C.blue}12`; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.blue, fontWeight: 700 }}>
+                          {r.symbol}
+                        </span>
+                        <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim, marginLeft: 8 }}>
+                          {r.name}
+                        </span>
+                      </div>
+                      <span style={{
+                        fontFamily: 'Share Tech Mono', fontSize: D.statusFont, color: C.dimmer,
+                        whiteSpace: 'nowrap', flexShrink: 0,
+                      }}>
+                        {r.exchDisp}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button onClick={() => addStock()} style={{
               background: C.blue, border: 'none', color: '#000',
               padding: isDesktop ? '12px 24px' : '9px 16px',
-              fontFamily: 'Share Tech Mono', fontSize: isDesktop ? 13 : 12, fontWeight: 700,
+              fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, fontWeight: 700,
               cursor: 'pointer', borderRadius: 4,
             }}>+ ADD</button>
             <button onClick={refreshAll} style={{
               background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim,
               padding: isDesktop ? '12px 16px' : '9px 12px',
-              fontFamily: 'Share Tech Mono', fontSize: isDesktop ? 12 : 11,
+              fontFamily: 'Share Tech Mono', fontSize: D.rowStatus,
               cursor: 'pointer', borderRadius: 4,
             }}>&#x27F3; REFRESH</button>
           </div>
