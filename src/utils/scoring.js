@@ -194,6 +194,7 @@ export function scoreStock(data, fundamentals, rsData, horizon = 'MEDIUM') {
   );
   let verdict = 'HOLD';
   if (total >= 70) verdict = 'BUY';
-  else if (total < 50) verdict = 'AVOID';
+  else if (total < 30) verdict = 'AVOID';
+  else if (total < 50) verdict = 'SELL';
   return { total, technical, momentum, risk, fundamental, verdict };
 }

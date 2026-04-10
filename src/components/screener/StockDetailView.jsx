@@ -36,7 +36,7 @@ function SignalsPanel({ signals, C, D }) {
 
 function ScorePanel({ score, horizon, C, D }) {
   if (!score) return null;
-  const verdictColor = score.verdict === 'BUY' ? C.yes : score.verdict === 'AVOID' ? C.no : C.caution;
+  const verdictColor = score.verdict === 'BUY' ? C.yes : score.verdict === 'SELL' ? C.no : score.verdict === 'AVOID' ? C.no : C.caution;
   const size = 110;
   const r = size * 0.38;
   const circ = 2 * Math.PI * r;
@@ -510,9 +510,9 @@ export function StockDetailView({
               <span style={{
                 fontFamily: 'Share Tech Mono', fontSize: 12, fontWeight: 700,
                 padding: '3px 12px', borderRadius: 10,
-                background: `${stockScore.verdict === 'BUY' ? C.yes : stockScore.verdict === 'AVOID' ? C.no : C.caution}18`,
-                border: `1px solid ${stockScore.verdict === 'BUY' ? C.yes : stockScore.verdict === 'AVOID' ? C.no : C.caution}60`,
-                color: stockScore.verdict === 'BUY' ? C.yes : stockScore.verdict === 'AVOID' ? C.no : C.caution,
+                background: `${stockScore.verdict === 'BUY' ? C.yes : stockScore.verdict === 'SELL' || stockScore.verdict === 'AVOID' ? C.no : C.caution}18`,
+                border: `1px solid ${stockScore.verdict === 'BUY' ? C.yes : stockScore.verdict === 'SELL' || stockScore.verdict === 'AVOID' ? C.no : C.caution}60`,
+                color: stockScore.verdict === 'BUY' ? C.yes : stockScore.verdict === 'SELL' || stockScore.verdict === 'AVOID' ? C.no : C.caution,
               }}>{stockScore.total} {stockScore.verdict}</span>
             )}
             {earningsDays != null && (

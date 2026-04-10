@@ -2,7 +2,7 @@
 /**
  * Should I Be Trading? — Local Dev Server
  * Uses ONLY Node.js built-in modules — no npm install needed
- * Run: node server.js
+ * Run: npm run server   (or: node server.cjs)
  * Open: http://localhost:3000
  */
 
@@ -341,7 +341,7 @@ server.listen(PORT, () => {
   console.log(`  ✓ Yahoo API   http://localhost:${PORT}/api/yahoo?symbol=SPY`);
   console.log(`  ✓ Health      http://localhost:${PORT}/api/health`);
   console.log('');
-  console.log('  Open Chrome → http://localhost:${PORT}');
+  console.log(`  Open Chrome → http://localhost:${PORT}`);
   console.log('  Press Ctrl+C to stop');
   console.log('');
 });

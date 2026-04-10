@@ -10,7 +10,7 @@ export function StockCard({ data, indicators, onRemove, onClick, score, signals,
   const regime = data.price > data.sma200 ? 'ABOVE 200d' : data.price > data.sma50 ? 'ABOVE 50d' : 'BELOW MAs';
   const regColor = data.price > data.sma200 ? C.yes : data.price > data.sma50 ? C.caution : C.no;
 
-  const verdictColor = score?.verdict === 'BUY' ? C.yes : score?.verdict === 'AVOID' ? C.no : C.caution;
+  const verdictColor = score?.verdict === 'BUY' ? C.yes : score?.verdict === 'SELL' ? C.no : score?.verdict === 'AVOID' ? C.no : C.caution;
   const rsKey = horizon === 'SHORT' ? 'rs1m' : horizon === 'LONG' ? 'rs1y' : 'rs3m';
   const rsVal = rsData?.[rsKey];
   const rsColor = rsVal > 1 ? C.yes : rsVal < 1 ? C.no : C.dim;
