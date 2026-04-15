@@ -131,7 +131,7 @@ export function SettingsScreen({ settings, onSave }) {
       <div style={{ marginTop: 16 }}>
         <Panel title="INSTALL AS APP">
           <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.textMid, lineHeight: 1.9 }}>
-            <div style={{ color: C.yes, marginBottom: 6 }}>Samsung S24 Ultra — Chrome:</div>
+            <div style={{ color: C.yes, marginBottom: 6 }}>Samsung S26 Ultra — Chrome:</div>
             <div>1. Open Chrome, tap menu</div>
             <div>2. Tap "Add to Home screen"</div>
             <div>3. Tap "Add" — app appears on home</div>

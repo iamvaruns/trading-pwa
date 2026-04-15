@@ -1,5 +1,5 @@
-# Should I Be Trading? — Setup Guide
-## Bloomberg Terminal PWA for Samsung S24 Ultra
+# Market IQ — Setup Guide
+## Bloomberg Terminal PWA for Samsung S26 Ultra
 
 ---
 
@@ -66,10 +66,10 @@ Then open `http://YOUR_PC_IP:8080` on your phone (same WiFi).
 
 ---
 
-## Step 3: Install on Samsung S24 Ultra
+## Step 3: Install on Samsung S26 Ultra
 
 ### Chrome (Recommended)
-1. Open Chrome on your S24 Ultra
+1. Open Chrome on your S26 Ultra
 2. Navigate to your hosted URL
 3. Wait for the app to load
 4. Tap the **⋮ menu** (top right)

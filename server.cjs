@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Should I Be Trading? — Local Dev Server
+ * Market IQ — Local Dev Server
  * Uses ONLY Node.js built-in modules — no npm install needed
  * Run: npm run server   (or: node server.cjs)
  * Open: http://localhost:3000
@@ -447,7 +447,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log('');
-  console.log('  ◈ SHOULD I BE TRADING? — Local Server');
+  console.log('  ◈ MARKET IQ — Local Server');
   console.log('  ═══════════════════════════════════════');
   console.log(`  ✓ Running at  http://localhost:${PORT}`);
   console.log(`  ✓ Yahoo API   http://localhost:${PORT}/api/yahoo?symbol=SPY`);

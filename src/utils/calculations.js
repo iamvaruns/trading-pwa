@@ -367,7 +367,6 @@ export function processChart(result) {
   const clean = validClose(closes);
   const lastClose = clean[clean.length - 1];
   const prevClose = clean[clean.length - 2];
-  const chartPrevClose = meta.chartPreviousClose || meta.previousClose;
   const lastVol = (volumes || []).filter(v => v != null).slice(-1)[0] || 0;
 
   const ohlc = [];
@@ -420,7 +419,7 @@ export function processChart(result) {
     symbol: meta.symbol,
     price: lastClose || meta.regularMarketPrice,
     prevClose,
-    change1d: (chartPrevClose || prevClose) ? ((lastClose - (chartPrevClose || prevClose)) / (chartPrevClose || prevClose)) * 100 : 0,
+    change1d: prevClose ? ((lastClose - prevClose) / prevClose) * 100 : 0,
     volume: lastVol,
     avgVol20: calcAvgVolume(volumes, 20),
     sma20: calcSMA(closes, 20),

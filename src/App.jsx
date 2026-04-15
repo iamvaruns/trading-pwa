@@ -42,7 +42,7 @@ export default function App() {
       }}>
         <div>
           <div style={{ fontSize: D.hdrTitle, color: C.text, fontWeight: 700, letterSpacing: '0.1em' }}>
-            ◈ SHOULD I BE TRADING?
+            ◈ MARKET IQ
           </div>
           <div style={{ fontSize: D.hdrSub, color: C.dim, marginTop: 2 }}>
             {settings.mode} MODE · BLOOMBERG TERMINAL

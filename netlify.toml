@@ -37,3 +37,8 @@
   from = "/api/finnhub-news"
   to = "/.netlify/functions/finnhub-news"
   status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
