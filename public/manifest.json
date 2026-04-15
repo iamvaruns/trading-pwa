@@ -1,7 +1,7 @@
 {
   "name": "Market IQ",
   "short_name": "MarketIQ",
-  "description": "Bloomberg-style market dashboard for swing traders",
+  "description": "Market dashboard for swing traders",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -45,7 +45,7 @@ export default function App() {
             ◈ MARKET IQ
           </div>
           <div style={{ fontSize: D.hdrSub, color: C.dim, marginTop: 2 }}>
-            {settings.mode} MODE · BLOOMBERG TERMINAL
+            {settings.mode} MODE · MARKET TERMINAL
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: isDesktop ? 10 : 6 }}>

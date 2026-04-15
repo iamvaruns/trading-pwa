@@ -122,7 +122,7 @@ export function SettingsScreen({ settings, onSave }) {
           </div>
           <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(0,136,204,0.06)', border: `1px solid ${C.blue}30`, borderRadius: 4 }}>
             <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim, lineHeight: 1.7 }}>
-              For true breadth data (% above 200d MA), consider upgrading to Polygon.io or Nasdaq Data Link. For institutional accuracy, FactSet or Bloomberg Terminal APIs provide tick-level breadth.
+              For true breadth data (% above 200d MA), consider upgrading to Polygon.io or Nasdaq Data Link. For institutional accuracy, FactSet APIs provide tick-level breadth.
             </div>
           </div>
         </Panel>

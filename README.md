@@ -1,5 +1,5 @@
 # Market IQ — Setup Guide
-## Bloomberg Terminal PWA for Samsung S26 Ultra
+## Trading PWA for Samsung S26 Ultra
 
 ---
 
@@ -184,7 +184,7 @@ Settings persist across sessions via localStorage.
 > For institutional-grade breadth data (% of stocks above 200d MA), consider:
 > - **Polygon.io** (Starter: $29/mo) — full market breadth
 > - **Nasdaq Data Link** (various tiers) — breadth + MCO
-> - **FactSet / Bloomberg** — professional grade
+> - **FactSet** — professional grade
 
 ---
 
