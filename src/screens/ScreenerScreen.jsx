@@ -38,6 +38,7 @@ export function ScreenerScreen() {
   const spyLoadedRef = useRef(false);
   const searchTimerRef = useRef(null);
   const dropdownRef = useRef(null);
+  const fetchedRef = useRef(new Set());
 
   useEffect(() => { localStorage.setItem('screener_stocks', JSON.stringify(stocks)); }, [stocks]);
   useEffect(() => { localStorage.setItem('screener_indicators', JSON.stringify(indicators)); }, [indicators]);
@@ -87,13 +88,22 @@ export function ScreenerScreen() {
   }, [horizon]);
 
   useEffect(() => {
-    stocks.forEach(s => { if (!stockStore[s]) fetchStock(s); });
-  }, [stocks, fetchStock, stockStore]);
+    stocks.forEach(s => {
+      if (!fetchedRef.current.has(s)) {
+        fetchedRef.current.add(s);
+        fetchStock(s);
+      }
+    });
+  }, [stocks, fetchStock]);
 
   const changeHorizon = (h) => {
     setHorizon(h);
     setStockStore({});
-    stocks.forEach(s => fetchStock(s, h));
+    fetchedRef.current.clear();
+    stocks.forEach(s => {
+      fetchedRef.current.add(s);
+      fetchStock(s, h);
+    });
   };
 
   const addStock = (symbolOverride) => {
@@ -115,10 +125,11 @@ export function ScreenerScreen() {
   const removeStock = (sym) => {
     setStocks(prev => prev.filter(s => s !== sym));
     setStockStore(prev => { const n = { ...prev }; delete n[sym]; return n; });
+    fetchedRef.current.delete(sym);
   };
 
   const toggleIndicator = (key) => setIndicators(prev => ({ ...prev, [key]: !prev[key] }));
-  const refreshAll = () => { setStockStore({}); stocks.forEach(s => fetchStock(s)); };
+  const refreshAll = () => { setStockStore({}); fetchedRef.current.clear(); stocks.forEach(s => { fetchedRef.current.add(s); fetchStock(s); }); };
 
   const indicatorBtns = [
     { key: 'sma50', label: 'SMA50', color: C.sma50 },
@@ -138,6 +149,7 @@ export function ScreenerScreen() {
         stockRSData={store?.rsData}
         earningsDays={store?.earningsDays}
         horizon={horizon}
+        sentimentData={store?.sentimentData}
       />
     );
   }
@@ -313,6 +325,7 @@ export function ScreenerScreen() {
                 rsData={store?.rsData}
                 earningsDays={store?.earningsDays}
                 horizon={horizon}
+                sentimentData={store?.sentimentData}
               />
             );
           })}

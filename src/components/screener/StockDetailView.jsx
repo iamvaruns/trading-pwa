@@ -3,6 +3,7 @@ import { createChart, CrosshairMode, LineStyle } from 'lightweight-charts';
 import { useTheme, scoreColor } from '../../context/ThemeContext';
 import { CHART_TIMEFRAMES } from '../../constants';
 import { loadStockDataForChart } from '../../utils/data';
+import { fetchCompanyNews } from '../../api/finnhub';
 import { calcSMASeries, calcRSISeries, calcMACDSeries, detectSellSignals } from '../../utils/calculations';
 import { Sk } from '../ui/Skeleton';
 
@@ -81,6 +82,113 @@ function SignalsPanel({ signals, C, D }) {
   );
 }
 
+function SentimentPanel({ symbol, sentimentData, C, D, isDesktop }) {
+  const [news, setNews] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!expanded || news.length > 0) return;
+    setNewsLoading(true);
+    fetchCompanyNews(symbol).then(articles => {
+      setNews(articles.slice(0, 5));
+      setNewsLoading(false);
+    }).catch(() => setNewsLoading(false));
+  }, [expanded, symbol, news.length]);
+
+  if (!sentimentData?.sentiment) return null;
+
+  const bull = sentimentData.sentiment.bullishPercent;
+  const bear = sentimentData.sentiment.bearishPercent;
+  const buzzVal = sentimentData.buzz?.buzz;
+  const articles = sentimentData.buzz?.articlesInLastWeek;
+  const newsScore = sentimentData.companyNewsScore;
+  const sectorAvg = sentimentData.sectorAverageNewsScore;
+  const isBullish = bull >= 0.5;
+  const barColor = bull >= 0.6 ? C.yes : bull <= 0.4 ? C.no : C.caution;
+  const buzzLabel = buzzVal > 1.5 ? 'HIGH' : buzzVal < 0.5 ? 'LOW' : 'NORMAL';
+  const buzzColor = buzzVal > 1.5 ? C.caution : buzzVal < 0.5 ? C.dim : C.text;
+
+  const vsLabel = newsScore != null && sectorAvg != null
+    ? (newsScore > sectorAvg + 0.05 ? 'ABOVE SECTOR' : newsScore < sectorAvg - 0.05 ? 'BELOW SECTOR' : 'AT SECTOR AVG')
+    : null;
+  const vsColor = newsScore > sectorAvg + 0.05 ? C.yes : newsScore < sectorAvg - 0.05 ? C.no : C.dim;
+
+  return (
+    <div style={{ marginTop: 12, padding: D.panelBodyPad, background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4 }}>
+      <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.panelTitle, color: C.dim, letterSpacing: '0.1em', marginBottom: 10 }}>NEWS SENTIMENT</div>
+
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.scoreLabel, color: C.yes }}>BULL {(bull * 100).toFixed(0)}%</span>
+          <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.scoreLabel, color: C.no }}>BEAR {(bear * 100).toFixed(0)}%</span>
+        </div>
+        <div style={{ height: 8, background: C.dimmer, borderRadius: 4, overflow: 'hidden', display: 'flex' }}>
+          <div style={{ width: `${bull * 100}%`, height: '100%', background: barColor, borderRadius: '4px 0 0 4px', transition: 'width 0.8s ease' }} />
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: 10, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.scoreLabel, color: C.dim, marginBottom: 2 }}>BUZZ</div>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowValue, color: buzzColor, fontWeight: 700 }}>
+            {buzzVal != null ? `${buzzVal.toFixed(2)}x` : '--'} <span style={{ fontSize: D.scoreLabel, fontWeight: 400 }}>{buzzLabel}</span>
+          </div>
+        </div>
+        <div>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.scoreLabel, color: C.dim, marginBottom: 2 }}>ARTICLES</div>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowValue, color: C.text, fontWeight: 700 }}>{articles ?? '--'}</div>
+        </div>
+        <div>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.scoreLabel, color: C.dim, marginBottom: 2 }}>NEWS SCORE</div>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowValue, color: newsScore > 0.5 ? C.yes : newsScore < 0.5 ? C.no : C.dim, fontWeight: 700 }}>
+            {newsScore != null ? newsScore.toFixed(2) : '--'}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.scoreLabel, color: C.dim, marginBottom: 2 }}>VS SECTOR</div>
+          <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowValue, color: vsColor, fontWeight: 700 }}>
+            {vsLabel || '--'}
+          </div>
+        </div>
+      </div>
+
+      <button onClick={() => setExpanded(v => !v)} style={{
+        background: 'none', border: `1px solid ${C.dimmer}`, color: C.dim,
+        padding: '5px 14px', cursor: 'pointer',
+        fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, borderRadius: 3, width: '100%',
+      }}>{expanded ? '▲ HIDE HEADLINES' : '▼ SHOW RECENT HEADLINES'}</button>
+
+      {expanded && (
+        <div style={{ marginTop: 10 }}>
+          {newsLoading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}><Sk h={14} /><Sk h={14} /><Sk h={14} /></div>
+          ) : news.length === 0 ? (
+            <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.dim, textAlign: 'center', padding: 10 }}>
+              No recent headlines available.
+            </div>
+          ) : (
+            news.map((article, i) => (
+              <a key={i} href={article.url} target="_blank" rel="noopener noreferrer" style={{
+                display: 'block', padding: '8px 0', borderTop: i > 0 ? `1px solid ${C.dimmer}` : 'none',
+                textDecoration: 'none', color: 'inherit',
+              }}>
+                <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.text, lineHeight: 1.4, marginBottom: 4 }}>
+                  {article.headline}
+                </div>
+                <div style={{ display: 'flex', gap: 10, fontFamily: 'Share Tech Mono', fontSize: D.statusFont, color: C.dim }}>
+                  <span>{article.source}</span>
+                  <span>{new Date(article.datetime * 1000).toLocaleDateString()}</span>
+                </div>
+              </a>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ScorePanel({ score, horizon, C, D }) {
   if (!score) return null;
   const verdictColor = score.verdict === 'BUY' ? C.yes : score.verdict === 'SELL' ? C.no : score.verdict === 'AVOID' ? C.no : C.caution;
@@ -89,7 +197,12 @@ function ScorePanel({ score, horizon, C, D }) {
   const circ = 2 * Math.PI * r;
   const fill = (score.total / 100) * circ;
 
-  const WEIGHTS = {
+  const hasSentiment = score.sentiment != null;
+  const WEIGHTS = hasSentiment ? {
+    SHORT:  { technical: 0.35, momentum: 0.25, risk: 0.18, fundamental: 0.08, sentiment: 0.14 },
+    MEDIUM: { technical: 0.26, momentum: 0.22, risk: 0.18, fundamental: 0.22, sentiment: 0.12 },
+    LONG:   { technical: 0.18, momentum: 0.18, risk: 0.18, fundamental: 0.36, sentiment: 0.10 },
+  } : {
     SHORT:  { technical: 0.40, momentum: 0.30, risk: 0.20, fundamental: 0.10 },
     MEDIUM: { technical: 0.30, momentum: 0.25, risk: 0.20, fundamental: 0.25 },
     LONG:   { technical: 0.20, momentum: 0.20, risk: 0.20, fundamental: 0.40 },
@@ -102,6 +215,9 @@ function ScorePanel({ score, horizon, C, D }) {
     { label: 'RISK', score: score.risk, weight: w.risk, color: scoreColor(score.risk, C) },
     { label: 'FUNDAMENTAL', score: score.fundamental, weight: w.fundamental, color: scoreColor(score.fundamental, C) },
   ];
+  if (hasSentiment) {
+    bars.push({ label: 'SENTIMENT', score: score.sentiment, weight: w.sentiment, color: scoreColor(score.sentiment, C) });
+  }
 
   return (
     <div style={{ marginTop: 12, padding: D.panelBodyPad, background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderRadius: 4 }}>
@@ -356,7 +472,7 @@ Write exactly 3 sentences. Be specific about numbers and conditions. End with on
 
 export function StockDetailView({
   symbol, onBack, stockScore, stockSignals, stockFundamentals,
-  stockRSData, earningsDays, horizon,
+  stockRSData, earningsDays, horizon, sentimentData,
 }) {
   const { C, D, isDesktop } = useTheme();
 
@@ -650,6 +766,7 @@ export function StockDetailView({
             )}
 
             <SignalsPanel signals={stockSignals} C={C} D={D} />
+            <SentimentPanel symbol={symbol} sentimentData={sentimentData} C={C} D={D} isDesktop={isDesktop} />
             <SellSignalPanel data={chartData} score={stockScore} C={C} D={D} />
             <ScorePanel score={stockScore} horizon={horizon} C={C} D={D} />
             <RiskCalculator data={chartData} C={C} D={D} isDesktop={isDesktop} candleSeriesRef={candleSeriesRef} />

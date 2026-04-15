@@ -7,15 +7,16 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-const SERIES_RE = /^[A-Z0-9_]{1,30}$/;
+const SYMBOL_RE = /^[A-Za-z0-9^=.\-]{1,20}$/;
 
-function proxyFRED(seriesId, apiKey) {
+function fetchSentiment(symbol, apiKey) {
   return new Promise((resolve, reject) => {
     const opts = {
-      hostname: "api.stlouisfed.org",
-      path: `/fred/series/observations?series_id=${encodeURIComponent(seriesId)}&api_key=${encodeURIComponent(apiKey)}&limit=30&sort_order=desc&file_type=json`,
+      hostname: "finnhub.io",
+      path: `/api/v1/news-sentiment?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(apiKey)}`,
       method: "GET",
-      timeout: 8000,
+      headers: { Accept: "application/json" },
+      timeout: 10000,
     };
 
     const req = https.request(opts, (res) => {
@@ -33,7 +34,7 @@ function proxyFRED(seriesId, apiKey) {
     req.on("error", reject);
     req.on("timeout", () => {
       req.destroy();
-      reject(new Error("FRED timeout"));
+      reject(new Error("Finnhub sentiment timeout"));
     });
     req.end();
   });
@@ -45,33 +46,33 @@ exports.handler = async (event) => {
   }
 
   const params = event.queryStringParameters || {};
-  const seriesId = params.series;
-  const apiKey = process.env.FRED_API_KEY;
+  const symbol = params.symbol;
+  const apiKey = process.env.FINNHUB_API_KEY;
 
   if (!apiKey) {
     return {
       statusCode: 200,
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      body: JSON.stringify({ observations: [] }),
+      body: JSON.stringify({}),
     };
   }
 
-  if (!seriesId || !SERIES_RE.test(seriesId)) {
+  if (!symbol || !SYMBOL_RE.test(symbol)) {
     return {
       statusCode: 400,
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "Invalid or missing series parameter" }),
+      body: JSON.stringify({ error: "Invalid or missing symbol parameter" }),
     };
   }
 
   try {
-    const data = await proxyFRED(seriesId, apiKey);
+    const data = await fetchSentiment(symbol, apiKey);
     return {
       statusCode: 200,
       headers: {
         ...CORS_HEADERS,
         "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=60",
+        "Cache-Control": "public, max-age=300",
       },
       body: JSON.stringify(data),
     };

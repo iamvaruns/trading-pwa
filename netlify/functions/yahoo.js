@@ -1,10 +1,13 @@
 const https = require("https");
 
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
 const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
+
+const SYMBOL_RE = /^[A-Za-z0-9^=.\-]{1,20}$/;
 
 function httpsGet(url, headers = {}) {
   return new Promise((resolve, reject) => {
@@ -105,11 +108,11 @@ exports.handler = async (event) => {
   const range = params.range || "1y";
   const interval = params.interval || "1d";
 
-  if (!symbol) {
+  if (!symbol || !SYMBOL_RE.test(symbol)) {
     return {
       statusCode: 400,
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "Missing symbol" }),
+      body: JSON.stringify({ error: "Invalid or missing symbol" }),
     };
   }
 

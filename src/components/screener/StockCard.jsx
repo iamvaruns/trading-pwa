@@ -3,7 +3,7 @@ import { Sparkline } from '../charts/Sparkline';
 import { SMATag } from './SMATag';
 import { VolumeBar } from './VolumeBar';
 
-export function StockCard({ data, indicators, onRemove, onClick, score, signals, rsData, earningsDays, horizon }) {
+export function StockCard({ data, indicators, onRemove, onClick, score, signals, rsData, earningsDays, horizon, sentimentData }) {
   const { C, D } = useTheme();
 
   const pos = data.change1d >= 0;
@@ -15,6 +15,11 @@ export function StockCard({ data, indicators, onRemove, onClick, score, signals,
   const rsVal = rsData?.[rsKey];
   const rsColor = rsVal > 1 ? C.yes : rsVal < 1 ? C.no : C.dim;
   const topSignals = (signals || []).slice(0, 3);
+
+  const bullPct = sentimentData?.sentiment?.bullishPercent;
+  const isBullish = bullPct != null && bullPct >= 0.5;
+  const sentLabel = bullPct != null ? (isBullish ? `BULL ${(bullPct * 100).toFixed(0)}%` : `BEAR ${((1 - bullPct) * 100).toFixed(0)}%`) : null;
+  const sentColor = bullPct != null ? (bullPct >= 0.6 ? C.yes : bullPct <= 0.4 ? C.no : C.caution) : null;
 
   return (
     <div className="fade-in" onClick={onClick} style={{
@@ -36,6 +41,13 @@ export function StockCard({ data, indicators, onRemove, onClick, score, signals,
                 padding: '2px 10px', borderRadius: 10,
                 background: `${verdictColor}18`, border: `1px solid ${verdictColor}60`, color: verdictColor,
               }}>{score.total} {score.verdict}</span>
+            )}
+            {sentLabel && (
+              <span style={{
+                fontFamily: 'Share Tech Mono', fontSize: D.rowStatus - 1,
+                padding: '2px 8px', borderRadius: 10,
+                background: `${sentColor}14`, border: `1px solid ${sentColor}50`, color: sentColor,
+              }}>{sentLabel}</span>
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>

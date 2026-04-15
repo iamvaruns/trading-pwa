@@ -1,12 +1,15 @@
 const https = require("https");
 
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
 const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-function callAnthropic(apiKey, prompt, mode) {
+const MAX_PROMPT_LENGTH = 4000;
+
+function callAnthropic(apiKey, prompt) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
       model: "claude-sonnet-4-20250514",
@@ -81,11 +84,11 @@ exports.handler = async (event) => {
 
   try {
     const { prompt } = JSON.parse(event.body);
-    if (!prompt) {
+    if (!prompt || typeof prompt !== "string" || prompt.length > MAX_PROMPT_LENGTH) {
       return {
         statusCode: 400,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-        body: JSON.stringify({ error: "Missing prompt" }),
+        body: JSON.stringify({ error: "Missing or invalid prompt" }),
       };
     }
 

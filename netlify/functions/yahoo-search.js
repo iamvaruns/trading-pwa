@@ -1,7 +1,8 @@
 const https = require("https");
 
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
 const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
@@ -46,7 +47,7 @@ exports.handler = async (event) => {
   }
 
   const params = event.queryStringParameters || {};
-  const query = (params.q || "").trim();
+  const query = (params.q || "").trim().slice(0, 50);
 
   if (!query) {
     return {

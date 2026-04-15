@@ -82,6 +82,7 @@ export function SettingsScreen({ settings, onSave }) {
             <div style={{ color: C.yes, marginBottom: 6 }}>Keys are set server-side (secure)</div>
             <div>● <span style={{ color: C.dim }}>ANTHROPIC_API_KEY</span> — AI terminal analysis</div>
             <div>● <span style={{ color: C.dim }}>FRED_API_KEY</span> — Fed Funds macro data</div>
+            <div>● <span style={{ color: C.dim }}>FINNHUB_API_KEY</span> — News sentiment analysis</div>
           </div>
           <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(0,136,204,0.06)', border: `1px solid ${C.blue}30`, borderRadius: 4 }}>
             <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim, lineHeight: 1.7 }}>
@@ -115,6 +116,7 @@ export function SettingsScreen({ settings, onSave }) {
           <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.textMid, lineHeight: 1.8 }}>
             <div>● <span style={{ color: C.yes }}>Yahoo Finance</span> — Prices, OHLCV, SMAs (via CORS proxy)</div>
             <div>● <span style={{ color: C.yes }}>FRED API</span> — Fed Funds rate (optional key)</div>
+            <div>● <span style={{ color: C.yes }}>Finnhub</span> — News sentiment, buzz scores, company news (optional key)</div>
             <div>● <span style={{ color: C.caution }}>Breadth data</span> — Approximated from sector ETFs</div>
             <div>● <span style={{ color: C.caution }}>Put/Call ratio</span> — Derived from VIX regime</div>
           </div>

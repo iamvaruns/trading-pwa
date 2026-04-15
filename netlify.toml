@@ -27,3 +27,13 @@
   from = "/api/yahoo-search"
   to = "/.netlify/functions/yahoo-search"
   status = 200
+
+[[redirects]]
+  from = "/api/finnhub-sentiment"
+  to = "/.netlify/functions/finnhub-sentiment"
+  status = 200
+
+[[redirects]]
+  from = "/api/finnhub-news"
+  to = "/.netlify/functions/finnhub-news"
+  status = 200

@@ -1,10 +1,13 @@
 const https = require("https");
 
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
 const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
+
+const SYMBOL_RE = /^[A-Za-z0-9^=.\-]{1,20}$/;
 
 function httpsGet(url, headers = {}) {
   return new Promise((resolve, reject) => {
@@ -84,7 +87,7 @@ async function proxyQuoteSummary(symbol) {
   const earningsDates = (ce.earnings?.earningsDate || []).map(d => d.raw).filter(Boolean);
 
   return {
-    trailingPE: ks.trailingPE?.raw || fd.currentPrice?.raw ? (pr.regularMarketPrice?.raw / (fd.earningsPerShare?.raw || 1)) : null,
+    trailingPE: ks.trailingPE?.raw ?? null,
     forwardPE: ks.forwardPE?.raw || null,
     profitMargins: fd.profitMargins?.raw || null,
     revenueGrowth: fd.revenueGrowth?.raw || null,
@@ -104,11 +107,11 @@ exports.handler = async (event) => {
   }
   const params = event.queryStringParameters || {};
   const symbol = params.symbol;
-  if (!symbol) {
+  if (!symbol || !SYMBOL_RE.test(symbol)) {
     return {
       statusCode: 400,
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "Missing symbol" }),
+      body: JSON.stringify({ error: "Invalid or missing symbol" }),
     };
   }
   try {

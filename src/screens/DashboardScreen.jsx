@@ -4,7 +4,7 @@ import { loadDashboardData } from '../utils/data';
 import { getAIAnalysis } from '../api/analysis';
 import {
   scoreVolatility, scoreTrend, scoreBreadth,
-  scoreMomentum, scoreMacro, computeMQS, getDecision,
+  scoreMomentum, scoreMacro, scoreSentimentMarket, computeMQS, getDecision,
 } from '../utils/scoring';
 import { Sk } from '../components/ui/Skeleton';
 import { Panel } from '../components/ui/Panel';
@@ -40,7 +40,7 @@ function MQRulesPanel({ C, D }) {
         <div style={{ background: C.bgPanel, border: `1px solid ${C.dimmer}`, borderTop: 'none', borderRadius: '0 0 4px 4px', padding: D.panelBodyPad }}>
           <div style={hdr}>CATEGORY WEIGHTS</div>
           <div style={val}>
-            Volatility 25% + Momentum 25% + Trend 20% + Breadth 20% + Macro 10% = MQ Score
+            Volatility 22% + Momentum 22% + Trend 18% + Breadth 18% + Macro 8% + Sentiment 12% = MQ Score (with Finnhub data). Without sentiment: Vol 25% + Mom 25% + Trend 20% + Breadth 20% + Macro 10%.
           </div>
 
           <div style={hdr}>EQUAL-WEIGHT CROSSCHECK</div>
@@ -100,18 +100,23 @@ export function DashboardScreen({ settings }) {
   const [secondsAgo, setSecondsAgo] = useState(0);
   const timerRef = useRef(null);
   const countRef = useRef(null);
+  const refreshIdRef = useRef(0);
 
   const refresh = useCallback(async () => {
+    const id = ++refreshIdRef.current;
     setStatus('UPDATING');
     setError(null);
     try {
       const d = await loadDashboardData();
+      if (id !== refreshIdRef.current) return;
+      const sentimentVal = scoreSentimentMarket(d);
       const sc = {
         volatility: scoreVolatility(d),
         trend: scoreTrend(d),
         breadth: scoreBreadth(d),
         momentum: scoreMomentum(d),
         macro: scoreMacro(d),
+        sentiment: sentimentVal,
       };
       sc.total = computeMQS(sc);
       const ew = Math.round(sc.trend * 0.4 + sc.momentum * 0.35 + sc.breadth * 0.25);
@@ -125,14 +130,16 @@ export function DashboardScreen({ settings }) {
 
       setAnalysisLoading(true);
       const ai = await getAIAnalysis(d, sc, dec, settings.mode);
+      if (id !== refreshIdRef.current) return;
       setAnalysis(ai);
       setAnalysisLoading(false);
     } catch {
+      if (id !== refreshIdRef.current) return;
       setError('Failed to load market data. Check network connection.');
       setStatus('ERROR');
       setLoading(false);
     }
-  }, [settings]);
+  }, [settings.mode]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -144,7 +151,7 @@ export function DashboardScreen({ settings }) {
   useEffect(() => {
     countRef.current = setInterval(() => setSecondsAgo(s => s + 1), 1000);
     return () => clearInterval(countRef.current);
-  }, [data]);
+  }, []);
 
   const spy = data?.spy;
   const regime = spy
@@ -241,16 +248,20 @@ export function DashboardScreen({ settings }) {
         {/* SCORE BREAKDOWN */}
         {!loading && scores && (
           <Panel title="SCORE BREAKDOWN">
-            <ScoreBar label="VOLATILITY" score={scores.volatility} weight="25%" color={scoreColor(scores.volatility, C)}
+            <ScoreBar label="VOLATILITY" score={scores.volatility} weight={scores.sentiment != null ? '22%' : '25%'} color={scoreColor(scores.volatility, C)}
               info="Based on VIX level, 5-day VIX slope, and 1-year VIX percentile. Low VIX with falling slope = favorable trading conditions." />
-            <ScoreBar label="MOMENTUM" score={scores.momentum} weight="25%" color={scoreColor(scores.momentum, C)}
+            <ScoreBar label="MOMENTUM" score={scores.momentum} weight={scores.sentiment != null ? '22%' : '25%'} color={scoreColor(scores.momentum, C)}
               info="Measures sector breadth direction: how many of 11 sectors are positive today, plus the spread between top 3 and bottom 3 performers." />
-            <ScoreBar label="TREND" score={scores.trend} weight="20%" color={scoreColor(scores.trend, C)}
+            <ScoreBar label="TREND" score={scores.trend} weight={scores.sentiment != null ? '18%' : '20%'} color={scoreColor(scores.trend, C)}
               info="SPY position relative to its 20/50/200-day moving averages, RSI(14) strength, and QQQ confirmation above its 50-day MA." />
-            <ScoreBar label="BREADTH" score={scores.breadth} weight="20%" color={scoreColor(scores.breadth, C)}
+            <ScoreBar label="BREADTH" score={scores.breadth} weight={scores.sentiment != null ? '18%' : '20%'} color={scoreColor(scores.breadth, C)}
               info="Percentage of 11 sector ETFs trading above their 50-day and 200-day moving averages. Higher participation = healthier market." />
-            <ScoreBar label="MACRO" score={scores.macro} weight="10%" color={scoreColor(scores.macro, C)}
+            <ScoreBar label="MACRO" score={scores.macro} weight={scores.sentiment != null ? '8%' : '10%'} color={scoreColor(scores.macro, C)}
               info="10-year Treasury yield level, DXY dollar index strength, and proximity to FOMC meetings. Lower yields and stable dollar = supportive." />
+            {scores.sentiment != null && (
+              <ScoreBar label="SENTIMENT" score={scores.sentiment} weight="12%" color={scoreColor(scores.sentiment, C)}
+                info="News sentiment analysis via Finnhub for SPY. Measures bullish/bearish ratio, news buzz volume, and overall company news score." />
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.dimmer}` }}>
               <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus, color: C.dim }}>WEIGHTED TOTAL</span>
               <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowValue, color: scoreColor(scores.total, C), fontWeight: 700 }}>{scores.total}%</span>
@@ -338,6 +349,28 @@ export function DashboardScreen({ settings }) {
               </>
             )}
           </Panel>
+
+          {!loading && data?.sentimentData?.sentiment && (
+            <Panel title="SENTIMENT" score={scores?.sentiment}>
+              {(() => {
+                const s = data.sentimentData;
+                const bull = s.sentiment.bullishPercent;
+                const bear = s.sentiment.bearishPercent;
+                const buzzVal = s.buzz?.buzz;
+                const articles = s.buzz?.articlesInLastWeek;
+                const bullUp = bull > 0.5;
+                return (
+                  <>
+                    <Row label="Bullish" value={`${(bull * 100).toFixed(0)}%`} up={bullUp} status={bull > 0.6 ? 'healthy' : bull < 0.4 ? 'risk-off' : 'neutral'} />
+                    <Row label="Bearish" value={`${(bear * 100).toFixed(0)}%`} up={bear < 0.4} status={bear > 0.6 ? 'risk-off' : bear < 0.4 ? 'healthy' : 'neutral'} />
+                    <Row label="News Buzz" value={buzzVal != null ? buzzVal.toFixed(2) + 'x' : '--'} up={buzzVal > 1} status={buzzVal > 1.5 ? 'elevated' : buzzVal < 0.5 ? 'low' : 'neutral'} />
+                    <Row label="Articles" value={articles != null ? String(articles) : '--'} status="neutral" />
+                    <Row label="News Score" value={s.companyNewsScore != null ? s.companyNewsScore.toFixed(2) : '--'} up={s.companyNewsScore > 0.5} status={s.companyNewsScore > 0.6 ? 'healthy' : s.companyNewsScore < 0.4 ? 'risk-off' : 'neutral'} />
+                  </>
+                );
+              })()}
+            </Panel>
+          )}
         </div>
 
         {/* SECTOR HEATMAP */}

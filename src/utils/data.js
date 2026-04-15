@@ -1,5 +1,6 @@
 import { fetchYahoo, fetchYahooQuote } from '../api/yahoo';
 import { fetchFRED } from '../api/fred';
+import { fetchSentiment } from '../api/finnhub';
 import { SECTORS } from '../constants';
 import { FOMC_DATES } from '../constants/timeframes';
 import {
@@ -10,19 +11,21 @@ import { scoreStock } from './scoring';
 
 export async function loadDashboardData() {
   const results = {};
+  const failedSources = [];
   const fetches = [
-    fetchYahoo('SPY').then(r => { results.spy = processChart(r); }).catch(() => {}),
-    fetchYahoo('QQQ').then(r => { results.qqq = processChart(r); }).catch(() => {}),
-    fetchYahoo('^VIX').then(r => { results.vix = processChart(r); }).catch(() => {}),
-    fetchYahoo('^TNX').then(r => { results.tnx = processChart(r); }).catch(() => {}),
-    fetchYahoo('^DXY').then(r => { results.dxy = processChart(r); }).catch(() => {}),
+    fetchYahoo('SPY').then(r => { results.spy = processChart(r); }).catch(() => { failedSources.push('SPY'); }),
+    fetchYahoo('QQQ').then(r => { results.qqq = processChart(r); }).catch(() => { failedSources.push('QQQ'); }),
+    fetchYahoo('^VIX').then(r => { results.vix = processChart(r); }).catch(() => { failedSources.push('VIX'); }),
+    fetchYahoo('^TNX').then(r => { results.tnx = processChart(r); }).catch(() => { failedSources.push('TNX'); }),
+    fetchYahoo('^DXY').then(r => { results.dxy = processChart(r); }).catch(() => { failedSources.push('DXY'); }),
     ...SECTORS.map(sec =>
       fetchYahoo(sec.ticker).then(r => {
         if (!results.sectors) results.sectors = [];
         results.sectors.push({ ...processChart(r), ticker: sec.ticker, name: sec.name });
-      }).catch(() => {})
+      }).catch(() => { failedSources.push(sec.ticker); })
     ),
-    fetchFRED('FEDFUNDS').then(v => { if (v) results.fedFunds = v[0]; }).catch(() => {}),
+    fetchFRED('FEDFUNDS').then(v => { if (v) results.fedFunds = v[0]; }).catch(() => { failedSources.push('FRED'); }),
+    fetchSentiment('SPY').then(s => { if (s) results.sentimentData = s; }).catch(() => { failedSources.push('SENTIMENT'); }),
   ];
 
   const WATCHLIST_EXTRA = [
@@ -70,6 +73,7 @@ export async function loadDashboardData() {
     return diff >= -24 && diff <= 72;
   });
 
+  results.failedSources = failedSources;
   return results;
 }
 
@@ -89,9 +93,10 @@ export async function loadSPYData() {
 }
 
 export async function loadStockDataWithScoring(symbol, spyCloses, horizon) {
-  const [chartResult, fundamentals] = await Promise.allSettled([
+  const [chartResult, fundamentals, sentimentResult] = await Promise.allSettled([
     fetchYahoo(symbol, '1y', '1d'),
     fetchYahooQuote(symbol),
+    fetchSentiment(symbol),
   ]);
 
   const data = processChart(
@@ -104,10 +109,11 @@ export async function loadStockDataWithScoring(symbol, spyCloses, horizon) {
   );
 
   const fund = fundamentals.status === 'fulfilled' ? fundamentals.value : null;
+  const sentimentData = sentimentResult.status === 'fulfilled' ? sentimentResult.value : null;
   const stockCloses = validClose(data.allCloses);
   const rsData = spyCloses.length > 0 ? calcRelativeStrength(stockCloses, spyCloses) : null;
   const signals = detectSignals(data);
-  const score = scoreStock(data, fund, rsData, horizon);
+  const score = scoreStock(data, fund, rsData, horizon, sentimentData);
 
   let earningsDays = null;
   if (fund?.earningsDate) {
@@ -115,7 +121,7 @@ export async function loadStockDataWithScoring(symbol, spyCloses, horizon) {
     if (diff > 0 && diff < 60) earningsDays = Math.ceil(diff);
   }
 
-  return { data, fundamentals: fund, rsData, signals, score, earningsDays };
+  return { data, fundamentals: fund, rsData, signals, score, earningsDays, sentimentData };
 }
 
 export async function loadStockDataForChart(symbol, range, interval, filterLastHour) {

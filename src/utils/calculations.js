@@ -12,13 +12,20 @@ export function calcSMA(closes, period) {
 export function calcRSI(closes, period = 14) {
   const clean = validClose(closes);
   if (clean.length < period + 1) return 50;
-  let gains = 0, losses = 0;
-  for (let i = clean.length - period; i < clean.length; i++) {
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 1; i <= period; i++) {
     const diff = clean[i] - clean[i - 1];
-    if (diff > 0) gains += diff; else losses += Math.abs(diff);
+    if (diff > 0) avgGain += diff; else avgLoss += Math.abs(diff);
   }
-  const rs = (gains / period) / (losses / period || 0.001);
-  return 100 - (100 / (1 + rs));
+  avgGain /= period;
+  avgLoss /= period;
+  for (let i = period + 1; i < clean.length; i++) {
+    const diff = clean[i] - clean[i - 1];
+    avgGain = (avgGain * (period - 1) + (diff > 0 ? diff : 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + (diff < 0 ? Math.abs(diff) : 0)) / period;
+  }
+  if (avgLoss === 0) return 100;
+  return 100 - 100 / (1 + avgGain / avgLoss);
 }
 
 export function calcSlope5d(closes) {
@@ -360,6 +367,7 @@ export function processChart(result) {
   const clean = validClose(closes);
   const lastClose = clean[clean.length - 1];
   const prevClose = clean[clean.length - 2];
+  const chartPrevClose = meta.chartPreviousClose || meta.previousClose;
   const lastVol = (volumes || []).filter(v => v != null).slice(-1)[0] || 0;
 
   const ohlc = [];
@@ -412,7 +420,7 @@ export function processChart(result) {
     symbol: meta.symbol,
     price: lastClose || meta.regularMarketPrice,
     prevClose,
-    change1d: prevClose ? ((lastClose - prevClose) / prevClose) * 100 : 0,
+    change1d: (chartPrevClose || prevClose) ? ((lastClose - (chartPrevClose || prevClose)) / (chartPrevClose || prevClose)) * 100 : 0,
     volume: lastVol,
     avgVol20: calcAvgVolume(volumes, 20),
     sma20: calcSMA(closes, 20),

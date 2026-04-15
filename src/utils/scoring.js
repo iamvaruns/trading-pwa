@@ -69,7 +69,43 @@ export function scoreMacro(d) {
   return clamp(s);
 }
 
+export function scoreSentimentMarket(d) {
+  if (!d.sentimentData?.sentiment) return null;
+  let s = 50;
+  const bull = d.sentimentData.sentiment.bullishPercent;
+  const newsScore = d.sentimentData.companyNewsScore;
+  const buzz = d.sentimentData.buzz?.buzz;
+
+  if (bull > 0.65) s += 25;
+  else if (bull > 0.55) s += 15;
+  else if (bull < 0.35) s -= 25;
+  else if (bull < 0.45) s -= 15;
+
+  if (buzz != null) {
+    if (buzz > 1.5) s += 10;
+    else if (buzz < 0.3) s -= 5;
+  }
+
+  if (newsScore != null) {
+    if (newsScore > 0.6) s += 10;
+    else if (newsScore < 0.4) s -= 10;
+  }
+
+  return clamp(s);
+}
+
 export function computeMQS(scores) {
+  const hasSentiment = scores.sentiment != null;
+  if (hasSentiment) {
+    return Math.round(
+      scores.volatility * 0.22 +
+      scores.momentum * 0.22 +
+      scores.trend * 0.18 +
+      scores.breadth * 0.18 +
+      scores.macro * 0.08 +
+      scores.sentiment * 0.12
+    );
+  }
   return Math.round(
     scores.volatility * 0.25 +
     scores.momentum * 0.25 +
@@ -87,6 +123,12 @@ export function getDecision(mqs, ew) {
 }
 
 const HORIZON_WEIGHTS = {
+  SHORT:  { technical: 0.35, momentum: 0.25, risk: 0.18, fundamental: 0.08, sentiment: 0.14 },
+  MEDIUM: { technical: 0.26, momentum: 0.22, risk: 0.18, fundamental: 0.22, sentiment: 0.12 },
+  LONG:   { technical: 0.18, momentum: 0.18, risk: 0.18, fundamental: 0.36, sentiment: 0.10 },
+};
+
+const HORIZON_WEIGHTS_NO_SENTIMENT = {
   SHORT:  { technical: 0.40, momentum: 0.30, risk: 0.20, fundamental: 0.10 },
   MEDIUM: { technical: 0.30, momentum: 0.25, risk: 0.20, fundamental: 0.25 },
   LONG:   { technical: 0.20, momentum: 0.20, risk: 0.20, fundamental: 0.40 },
@@ -339,18 +381,94 @@ function scoreFundamental(fund, horizon) {
   return clamp(s);
 }
 
-export function scoreStock(data, fundamentals, rsData, horizon = 'MEDIUM') {
-  const weights = HORIZON_WEIGHTS[horizon] || HORIZON_WEIGHTS.MEDIUM;
+export function scoreSentimentStock(sentimentData, horizon) {
+  if (!sentimentData?.sentiment) return null;
+  let s = 50;
+  const bull = sentimentData.sentiment.bullishPercent;
+  const newsScore = sentimentData.companyNewsScore;
+  const sectorAvg = sentimentData.sectorAverageNewsScore;
+  const buzz = sentimentData.buzz?.buzz;
+
+  if (horizon === 'SHORT') {
+    if (bull > 0.65) s += 20;
+    else if (bull > 0.55) s += 10;
+    else if (bull < 0.35) s -= 20;
+    else if (bull < 0.45) s -= 10;
+
+    if (buzz != null) {
+      if (buzz > 2.0) s += 15;
+      else if (buzz > 1.5) s += 10;
+      else if (buzz < 0.3) s -= 8;
+    }
+
+    if (newsScore != null && sectorAvg != null) {
+      if (newsScore > sectorAvg + 0.1) s += 10;
+      else if (newsScore < sectorAvg - 0.1) s -= 10;
+    }
+  } else if (horizon === 'LONG') {
+    if (bull > 0.65) s += 25;
+    else if (bull > 0.55) s += 15;
+    else if (bull < 0.35) s -= 25;
+    else if (bull < 0.45) s -= 15;
+
+    if (buzz != null) {
+      if (buzz > 1.5) s += 5;
+      else if (buzz < 0.3) s -= 3;
+    }
+
+    if (newsScore != null && sectorAvg != null) {
+      if (newsScore > sectorAvg + 0.1) s += 8;
+      else if (newsScore < sectorAvg - 0.1) s -= 8;
+    }
+  } else {
+    if (bull > 0.65) s += 22;
+    else if (bull > 0.55) s += 12;
+    else if (bull < 0.35) s -= 22;
+    else if (bull < 0.45) s -= 12;
+
+    if (buzz != null) {
+      if (buzz > 1.5) s += 8;
+      else if (buzz < 0.3) s -= 5;
+    }
+
+    if (newsScore != null && sectorAvg != null) {
+      if (newsScore > sectorAvg + 0.1) s += 10;
+      else if (newsScore < sectorAvg - 0.1) s -= 10;
+    }
+  }
+
+  return clamp(s);
+}
+
+export function scoreStock(data, fundamentals, rsData, horizon = 'MEDIUM', sentimentData = null) {
+  const sentimentScore = scoreSentimentStock(sentimentData, horizon);
+  const hasSentiment = sentimentScore != null;
+  const weights = hasSentiment
+    ? (HORIZON_WEIGHTS[horizon] || HORIZON_WEIGHTS.MEDIUM)
+    : (HORIZON_WEIGHTS_NO_SENTIMENT[horizon] || HORIZON_WEIGHTS_NO_SENTIMENT.MEDIUM);
+
   const technical = scoreTechnical(data, horizon);
   const momentum = scoreMomentumStock(data, rsData, horizon);
   const risk = scoreRisk(data, horizon);
   const fundamental = scoreFundamental(fundamentals, horizon);
-  const total = Math.round(
-    technical * weights.technical +
-    momentum * weights.momentum +
-    risk * weights.risk +
-    fundamental * weights.fundamental
-  );
+
+  let total;
+  if (hasSentiment) {
+    total = Math.round(
+      technical * weights.technical +
+      momentum * weights.momentum +
+      risk * weights.risk +
+      fundamental * weights.fundamental +
+      sentimentScore * weights.sentiment
+    );
+  } else {
+    total = Math.round(
+      technical * weights.technical +
+      momentum * weights.momentum +
+      risk * weights.risk +
+      fundamental * weights.fundamental
+    );
+  }
 
   let verdict = 'HOLD';
   if (horizon === 'SHORT') {
@@ -367,5 +485,8 @@ export function scoreStock(data, fundamentals, rsData, horizon = 'MEDIUM') {
     else if (total < 50) verdict = 'SELL';
   }
 
-  return { total, technical, momentum, risk, fundamental, verdict, horizon };
+  return {
+    total, technical, momentum, risk, fundamental,
+    sentiment: sentimentScore, verdict, horizon,
+  };
 }

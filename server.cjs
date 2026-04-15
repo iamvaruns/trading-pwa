@@ -262,6 +262,11 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ observations: [] }));
       return;
     }
+    if (!seriesId || !/^[A-Z0-9_]{1,30}$/.test(seriesId)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid or missing series parameter' }));
+      return;
+    }
     console.log(`  📊 FRED: ${seriesId}`);
     try {
       const data = await fetchFRED(seriesId, apiKey);
@@ -324,7 +329,13 @@ const server = http.createServer(async (req, res) => {
           res.writeHead(502, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: e.message }));
         });
-        apiReq.on('timeout', () => { apiReq.destroy(); });
+        apiReq.on('timeout', () => {
+          apiReq.destroy();
+          if (!res.headersSent) {
+            res.writeHead(504, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Anthropic API timeout' }));
+          }
+        });
         apiReq.write(payload);
         apiReq.end();
       } catch {
@@ -332,6 +343,70 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ error: 'Invalid request body' }));
       }
     });
+    return;
+  }
+
+  // ── API: Finnhub Sentiment proxy ──────────────────────────────────────────
+  if (pathname === '/api/finnhub-sentiment') {
+    const symbol = parsed.query.symbol;
+    const apiKey = process.env.FINNHUB_API_KEY;
+    if (!apiKey) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({}));
+      return;
+    }
+    if (!symbol) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing symbol' }));
+      return;
+    }
+    console.log(`  🧠 Finnhub Sentiment: ${symbol}`);
+    try {
+      const encoded = encodeURIComponent(symbol);
+      const fUrl = `https://finnhub.io/api/v1/news-sentiment?symbol=${encoded}&token=${encodeURIComponent(apiKey)}`;
+      const fRes = await httpsGet(fUrl, { Accept: 'application/json' });
+      const json = JSON.parse(fRes.body);
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' });
+      res.end(JSON.stringify(json));
+    } catch (e) {
+      console.error(`  ✗ Finnhub Sentiment error for ${symbol}:`, e.message);
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+
+  // ── API: Finnhub Company News proxy ─────────────────────────────────────────
+  if (pathname === '/api/finnhub-news') {
+    const symbol = parsed.query.symbol;
+    const apiKey = process.env.FINNHUB_API_KEY;
+    if (!apiKey) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify([]));
+      return;
+    }
+    if (!symbol) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing symbol' }));
+      return;
+    }
+    console.log(`  📰 Finnhub News: ${symbol}`);
+    try {
+      const encoded = encodeURIComponent(symbol);
+      const now = new Date();
+      const to = now.toISOString().slice(0, 10);
+      const from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const fUrl = `https://finnhub.io/api/v1/company-news?symbol=${encoded}&from=${from}&to=${to}&token=${encodeURIComponent(apiKey)}`;
+      const fRes = await httpsGet(fUrl, { Accept: 'application/json' });
+      const articles = JSON.parse(fRes.body);
+      const trimmed = Array.isArray(articles) ? articles.slice(0, 10) : [];
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' });
+      res.end(JSON.stringify(trimmed));
+    } catch (e) {
+      console.error(`  ✗ Finnhub News error for ${symbol}:`, e.message);
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
     return;
   }
 

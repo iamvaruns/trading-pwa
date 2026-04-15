@@ -1,6 +1,9 @@
 const API_BASE = '';
 
 export async function getAIAnalysis(data, scores, decision, mode) {
+  const sentimentLine = data.sentimentData?.sentiment
+    ? `\n- Sentiment: Bullish ${(data.sentimentData.sentiment.bullishPercent * 100).toFixed(0)}% | News Buzz ${data.sentimentData.buzz?.buzz?.toFixed(2) || 'N/A'}x | News Score ${data.sentimentData.companyNewsScore?.toFixed(2) || 'N/A'} | Score: ${scores.sentiment != null ? scores.sentiment + '%' : 'N/A'}`
+    : '';
   const prompt = `You are a professional stock market analyst writing a terminal-style briefing for ${mode} traders.
 
 Market data snapshot:
@@ -9,7 +12,7 @@ Market data snapshot:
 - SPY vs MA200: ${data.spy?.price > data.spy?.sma200 ? 'ABOVE (+' + (((data.spy?.price - data.spy?.sma200) / data.spy?.sma200) * 100).toFixed(1) + '%)' : 'BELOW'}
 - SPY vs MA50: ${data.spy?.price > data.spy?.sma50 ? 'ABOVE' : 'BELOW'} | TNX: ${data.tnx?.price?.toFixed(2)}% | DXY: ${data.dxy?.price?.toFixed(2)}
 - Sectors positive: ${(data.sectors || []).filter(s => s.change1d > 0).length}/11
-- Score breakdown: Vol ${scores.volatility}% | Trend ${scores.trend}% | Breadth ${scores.breadth}% | Mom ${scores.momentum}% | Macro ${scores.macro}%
+- Score breakdown: Vol ${scores.volatility}% | Trend ${scores.trend}% | Breadth ${scores.breadth}% | Mom ${scores.momentum}% | Macro ${scores.macro}%${sentimentLine}
 - FOMC risk: ${data.fomcSoon ? 'YES — EVENT WITHIN 72H' : 'No'}
 - Mode: ${mode} TRADING
 
@@ -20,6 +23,7 @@ Write exactly 3 sentences. Be specific about actual numbers and conditions. End 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt }),
+      signal: AbortSignal.timeout(35000),
     });
     const json = await res.json();
     return json.text || json.error || 'Analysis unavailable.';
