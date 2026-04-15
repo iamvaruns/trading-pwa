@@ -22,9 +22,10 @@ export async function fetchYahooQuote(symbol) {
   }
 }
 
-export async function searchYahooTickers(query) {
+export async function searchYahooTickers(query, mode) {
   try {
-    const url = `${API_BASE}/api/yahoo-search?q=${encodeURIComponent(query)}`;
+    const modeParam = mode ? `&mode=${encodeURIComponent(mode)}` : '';
+    const url = `${API_BASE}/api/yahoo-search?q=${encodeURIComponent(query)}${modeParam}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return [];
     const json = await res.json();

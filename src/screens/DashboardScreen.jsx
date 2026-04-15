@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme, scoreColor } from '../context/ThemeContext';
-import { loadDashboardData } from '../utils/data';
+import { loadDashboardData, DEFAULT_WATCHLIST } from '../utils/data';
 import { getAIAnalysis } from '../api/analysis';
 import {
   scoreVolatility, scoreTrend, scoreBreadth,
@@ -14,8 +14,22 @@ import { Badge } from '../components/ui/Badge';
 import { ScoreBar } from '../components/ui/ScoreBar';
 import { SectorBar } from '../components/ui/SectorBar';
 import { Tape } from '../components/ui/Tape';
-import { Sparkline } from '../components/charts/Sparkline';
+import { MarketPricesPanel } from '../components/dashboard/MarketPricesPanel';
 import { SPYChart } from '../components/charts/SPYChart';
+
+const WL_STORAGE_KEY = 'market_prices_watchlist';
+
+function loadWatchlistItems() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(WL_STORAGE_KEY));
+    if (Array.isArray(stored) && stored.length > 0) return stored;
+  } catch { /* use defaults */ }
+  return DEFAULT_WATCHLIST;
+}
+
+function saveWatchlistItems(items) {
+  localStorage.setItem(WL_STORAGE_KEY, JSON.stringify(items));
+}
 
 function MQRulesPanel({ C, D }) {
   const [open, setOpen] = useState(false);
@@ -98,16 +112,36 @@ export function DashboardScreen({ settings }) {
   const [error, setError] = useState(null);
   const [status, setStatus] = useState('LIVE');
   const [secondsAgo, setSecondsAgo] = useState(0);
+  const [watchlistItems, setWatchlistItems] = useState(loadWatchlistItems);
   const timerRef = useRef(null);
   const countRef = useRef(null);
   const refreshIdRef = useRef(0);
+  const watchlistRef = useRef(watchlistItems);
+  watchlistRef.current = watchlistItems;
+
+  const handleAddTicker = useCallback((item) => {
+    setWatchlistItems(prev => {
+      if (prev.some(w => w.yahoo === item.yahoo)) return prev;
+      const next = [...prev, item];
+      saveWatchlistItems(next);
+      return next;
+    });
+  }, []);
+
+  const handleRemoveTicker = useCallback((yahoo) => {
+    setWatchlistItems(prev => {
+      const next = prev.filter(w => w.yahoo !== yahoo);
+      saveWatchlistItems(next);
+      return next;
+    });
+  }, []);
 
   const refresh = useCallback(async () => {
     const id = ++refreshIdRef.current;
     setStatus('UPDATING');
     setError(null);
     try {
-      const d = await loadDashboardData();
+      const d = await loadDashboardData(watchlistRef.current);
       if (id !== refreshIdRef.current) return;
       const sentimentVal = scoreSentimentMarket(d);
       const sc = {
@@ -275,36 +309,11 @@ export function DashboardScreen({ settings }) {
         {/* MARKET PRICES */}
         {!loading && data?.watchlist && (
           <div style={{ marginTop: 14 }}>
-            <Panel title="MARKET PRICES">
-              <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: isDesktop ? 14 : 10 }}>
-                {data.watchlist.map(item => {
-                  if (item.price == null) return null;
-                  const up = item.change1d >= 0;
-                  return (
-                    <div key={item.label} style={{
-                      padding: '8px 10px', background: C.bg, borderRadius: 4,
-                      border: `1px solid ${C.dimmer}`,
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <span style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowLabel, color: C.text, fontWeight: 700 }}>{item.label}</span>
-                        <span style={{
-                          fontFamily: 'Share Tech Mono', fontSize: D.rowStatus,
-                          color: up ? C.yes : C.no, fontWeight: 700,
-                        }}>
-                          {up ? '▲' : '▼'} {Math.abs(item.change1d || 0).toFixed(2)}%
-                        </span>
-                      </div>
-                      <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowValue, color: C.textMid }}>
-                        {item.price >= 1000 ? item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : item.price.toFixed(2)}
-                      </div>
-                      <div style={{ fontFamily: 'Share Tech Mono', fontSize: D.rowStatus - 2, color: C.dim, marginTop: 2 }}>
-                        {item.name}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Panel>
+            <MarketPricesPanel
+              watchlist={data.watchlist}
+              onAdd={handleAddTicker}
+              onRemove={handleRemoveTicker}
+            />
           </div>
         )}
 

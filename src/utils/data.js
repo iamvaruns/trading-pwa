@@ -9,7 +9,25 @@ import {
 } from './calculations';
 import { scoreStock } from './scoring';
 
-export async function loadDashboardData() {
+export const DEFAULT_WATCHLIST = [
+  { yahoo: 'ES=F',    label: 'ES',     name: 'E-Mini S&P Futures' },
+  { yahoo: '^GSPC',   label: 'SPX',    name: 'S&P 500' },
+  { yahoo: 'SPY',     label: 'SPY',    name: 'SPDR S&P 500' },
+  { yahoo: 'NQ=F',    label: 'NQ',     name: 'Nasdaq Futures' },
+  { yahoo: 'QQQ',     label: 'QQQ',    name: 'Invesco QQQ' },
+  { yahoo: '^VIX',    label: 'VIX',    name: 'S&P 500 Volatility' },
+  { yahoo: '^BSESN',  label: 'SENSEX', name: 'S&P BSE Sensex' },
+  { yahoo: '^NSEI',   label: 'NIFTY',  name: 'Nifty 50' },
+  { yahoo: 'GC=F',    label: 'GC',     name: 'Gold Futures' },
+  { yahoo: 'CL=F',    label: 'CL',     name: 'Crude Oil Futures' },
+  { yahoo: 'BTC-USD', label: 'BTC',    name: 'Bitcoin' },
+  { yahoo: 'ETH-USD', label: 'ETH',    name: 'Ethereum' },
+];
+
+const CORE_SYMBOLS = new Set(['SPY', 'QQQ', '^VIX', '^TNX', '^DXY']);
+
+export async function loadDashboardData(watchlistItems) {
+  const wl = watchlistItems || DEFAULT_WATCHLIST;
   const results = {};
   const failedSources = [];
   const fetches = [
@@ -28,20 +46,9 @@ export async function loadDashboardData() {
     fetchSentiment('SPY').then(s => { if (s) results.sentimentData = s; }).catch(() => { failedSources.push('SENTIMENT'); }),
   ];
 
-  const WATCHLIST_EXTRA = [
-    { yahoo: 'ES=F',   label: 'ES',     name: 'E-Mini S&P Futures' },
-    { yahoo: '^BSESN', label: 'SENSEX', name: 'S&P BSE Sensex' },
-    { yahoo: '^NSEI',  label: 'NIFTY',  name: 'Nifty 50' },
-    { yahoo: 'GC=F',   label: 'GC',     name: 'Gold Futures' },
-    { yahoo: '^GSPC',  label: 'SPX',    name: 'S&P 500' },
-    { yahoo: 'NQ=F',   label: 'NQ',     name: 'Nasdaq Futures' },
-    { yahoo: 'CL=F',   label: 'CL',     name: 'Crude Oil Futures' },
-    { yahoo: 'BTC-USD', label: 'BTC',   name: 'Bitcoin' },
-    { yahoo: 'ETH-USD', label: 'ETH',   name: 'Ethereum' },
-  ];
-
+  const extraItems = wl.filter(item => !CORE_SYMBOLS.has(item.yahoo));
   const watchlistResults = {};
-  const wlFetches = WATCHLIST_EXTRA.map(item =>
+  const wlFetches = extraItems.map(item =>
     fetchYahoo(item.yahoo, '5d', '1d').then(r => {
       const d = processChart(r);
       watchlistResults[item.yahoo] = { label: item.label, name: item.name, price: d.price, change1d: d.change1d };
@@ -52,20 +59,20 @@ export async function loadDashboardData() {
 
   if (results.vix) results.vix.slope5d = calcSlope5d(results.vix.closes);
 
-  results.watchlist = [
-    { label: 'ES',     name: 'E-Mini S&P Futures', price: watchlistResults['ES=F']?.price,    change1d: watchlistResults['ES=F']?.change1d },
-    { label: 'SPX',    name: 'S&P 500',            price: watchlistResults['^GSPC']?.price,   change1d: watchlistResults['^GSPC']?.change1d },
-    { label: 'SPY',    name: 'SPDR S&P 500',       price: results.spy?.price,                 change1d: results.spy?.change1d },
-    { label: 'NQ',     name: 'Nasdaq Futures',      price: watchlistResults['NQ=F']?.price,    change1d: watchlistResults['NQ=F']?.change1d },
-    { label: 'QQQ',    name: 'Invesco QQQ',         price: results.qqq?.price,                 change1d: results.qqq?.change1d },
-    { label: 'VIX',    name: 'S&P 500 Volatility',  price: results.vix?.price,                 change1d: results.vix?.change1d },
-    { label: 'SENSEX', name: 'S&P BSE Sensex',      price: watchlistResults['^BSESN']?.price,  change1d: watchlistResults['^BSESN']?.change1d },
-    { label: 'NIFTY',  name: 'Nifty 50',            price: watchlistResults['^NSEI']?.price,   change1d: watchlistResults['^NSEI']?.change1d },
-    { label: 'GC',     name: 'Gold Futures',         price: watchlistResults['GC=F']?.price,    change1d: watchlistResults['GC=F']?.change1d },
-    { label: 'CL',     name: 'Crude Oil Futures',    price: watchlistResults['CL=F']?.price,    change1d: watchlistResults['CL=F']?.change1d },
-    { label: 'BTC',    name: 'Bitcoin',              price: watchlistResults['BTC-USD']?.price,  change1d: watchlistResults['BTC-USD']?.change1d },
-    { label: 'ETH',    name: 'Ethereum',             price: watchlistResults['ETH-USD']?.price,  change1d: watchlistResults['ETH-USD']?.change1d },
-  ];
+  const coreData = {
+    'SPY':  { price: results.spy?.price, change1d: results.spy?.change1d },
+    'QQQ':  { price: results.qqq?.price, change1d: results.qqq?.change1d },
+    '^VIX': { price: results.vix?.price, change1d: results.vix?.change1d },
+    '^TNX': { price: results.tnx?.price, change1d: results.tnx?.change1d },
+    '^DXY': { price: results.dxy?.price, change1d: results.dxy?.change1d },
+  };
+
+  results.watchlist = wl.map(item => {
+    const core = coreData[item.yahoo];
+    const extra = watchlistResults[item.yahoo];
+    const src = core || extra || {};
+    return { label: item.label, name: item.name, yahoo: item.yahoo, price: src.price, change1d: src.change1d };
+  });
 
   const now = new Date();
   results.fomcSoon = FOMC_DATES.some(d => {

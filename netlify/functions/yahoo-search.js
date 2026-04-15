@@ -41,6 +41,8 @@ const ALLOWED_EXCHANGES = new Set([
   "NSI", "BSE", "NSE", "BOM",
 ]);
 
+const BROAD_TYPES = new Set(["EQUITY", "ETF", "INDEX", "FUTURE", "CRYPTOCURRENCY", "MUTUALFUND"]);
+
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 204, headers: CORS_HEADERS, body: "" };
@@ -48,6 +50,7 @@ exports.handler = async (event) => {
 
   const params = event.queryStringParameters || {};
   const query = (params.q || "").trim().slice(0, 50);
+  const mode = (params.mode || "").trim();
 
   if (!query) {
     return {
@@ -66,15 +69,29 @@ exports.handler = async (event) => {
     });
 
     const json = JSON.parse(res.body);
-    const quotes = (json.quotes || [])
-      .filter(q => q.quoteType === "EQUITY" && ALLOWED_EXCHANGES.has(q.exchange))
-      .map(q => ({
-        symbol: q.symbol,
-        name: q.shortname || q.longname || q.symbol,
-        exchange: q.exchange,
-        exchDisp: q.exchDisp || q.exchange,
-      }))
-      .slice(0, 8);
+    let quotes;
+    if (mode === "all") {
+      quotes = (json.quotes || [])
+        .filter(q => BROAD_TYPES.has(q.quoteType))
+        .map(q => ({
+          symbol: q.symbol,
+          name: q.shortname || q.longname || q.symbol,
+          type: q.quoteType,
+          exchange: q.exchange,
+          exchDisp: q.exchDisp || q.exchange,
+        }))
+        .slice(0, 10);
+    } else {
+      quotes = (json.quotes || [])
+        .filter(q => q.quoteType === "EQUITY" && ALLOWED_EXCHANGES.has(q.exchange))
+        .map(q => ({
+          symbol: q.symbol,
+          name: q.shortname || q.longname || q.symbol,
+          exchange: q.exchange,
+          exchDisp: q.exchDisp || q.exchange,
+        }))
+        .slice(0, 8);
+    }
 
     return {
       statusCode: 200,
